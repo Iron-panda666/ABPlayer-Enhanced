@@ -1,21 +1,5 @@
 <script lang="ts">
-  /**
-   * The mini-player strip, redesigned to `docs/Audiobook app design
-   * improvements/miniplayer.CSS` (1g, 360×104): a 3px accent rail along the
-   * top, 60px cover, Newsreader title, Manrope "Ch 10 · Author", mono
-   * elapsed / total, then replay_30 · play · forward_30.
-   *
-   * The design file's own tokens (--abmp-*) are mapped onto the app's colour
-   * variables rather than hardcoded, so the window follows whichever colour
-   * theme the main window sends it. Its px values are used as written: the
-   * mini window pins its root font-size to 16px (see MiniPlayer.svelte), so
-   * 1rem is 16px here and the layout lands on the design's pixel grid.
-   *
-   * The mini window is a separate webview with no access to the stores, so
-   * everything comes in through `state` and every control reports back
-   * through a callback. The library has no bar of its own by design (handoff
-   * 1a): its continue card is the docked player.
-   */
+  import type { Snippet } from "svelte";
   import { formatTime, formatTimeShort, parseTime } from "../utils/format";
   import { focusOnMount } from "../utils/focusOnMount";
   import { Cover, IconButton, PlayButton } from "./ui";
@@ -34,6 +18,9 @@
     speedLabel?: string;
     /** Replaces the subtitle while set. */
     error?: string | null;
+    canPlay?: boolean;
+    previous?: boolean;
+    next?: boolean;
   }
 
   interface Props {
@@ -42,10 +29,12 @@
     onskip: (seconds: number) => void;
     /** With this set, the elapsed time can be clicked and typed over to jump there. */
     onseek?: (seconds: number) => void;
+    onstep?: (direction: -1 | 1) => void;
+    extraControls?: Snippet;
   }
 
   // Held as `np`: a local called `state` would shadow the $state rune used below
-  let { state: np, onplay, onskip, onseek }: Props = $props();
+  let { state: np, onplay, onskip, onseek, onstep, extraControls }: Props = $props();
 
   // Typing a time: the draft is local, so the once-a-second state updates do not overwrite it
   let editing = $state(false);
@@ -93,10 +82,6 @@
 <!-- Everything that is not a control is a drag region: the window has no
      decorations, so the frame itself is the title bar. -->
 <div class="np" data-tauri-drag-region>
-  <div class="np-rail" data-tauri-drag-region="deep">
-    <div class="np-rail-fill" style="width: {pct}%;"></div>
-  </div>
-
   <div class="np-body" data-tauri-drag-region>
     <span class="np-cover" class:art={!!np.coverArt} data-tauri-drag-region="deep">
       <Cover src={np.coverArt} alt="" size="3.75rem" />
@@ -145,12 +130,31 @@
       {/if}
     </div>
 
-    <div class="np-controls">
-      <IconButton icon="replay_30" label="Back 30 seconds" size="2rem" onclick={() => onskip(-30)} />
-      <PlayButton playing={np.playing} loading={np.loading} size="2.625rem" onclick={onplay} />
-      <IconButton icon="forward_30" label="Forward 30 seconds" size="2rem" onclick={() => onskip(30)} />
-    </div>
   </div>
+  <div class="np-rail">
+    <div class="np-rail-fill" style="width: {pct}%;"></div>
+    {#if canType}
+      <input type="range" min="0" max={np.duration} step="any" value={np.currentTime}
+        aria-label="Playback position" onchange={(e) => onseek?.(e.currentTarget.valueAsNumber)} />
+    {/if}
+  </div>
+  <div class="np-controls">
+    {#if onstep}
+      <IconButton icon="skip_previous" label="Previous chapter or track" size="2rem"
+        disabled={!np.previous} onclick={() => onstep?.(-1)} />
+    {/if}
+    <IconButton icon="replay_30" label="Back 30 seconds" size="2rem" disabled={np.canPlay === false}
+      onclick={() => onskip(-30)} />
+    <PlayButton playing={np.playing} loading={np.loading} size="2.5rem" disabled={np.canPlay === false}
+      onclick={onplay} />
+    <IconButton icon="forward_30" label="Forward 30 seconds" size="2rem" disabled={np.canPlay === false}
+      onclick={() => onskip(30)} />
+    {#if onstep}
+      <IconButton icon="skip_next" label="Next chapter or track" size="2rem"
+        disabled={!np.next} onclick={() => onstep?.(1)} />
+    {/if}
+  </div>
+  {@render extraControls?.()}
 </div>
 
 <style>
@@ -159,34 +163,49 @@
     height: 100%;
     display: flex;
     flex-direction: column;
+    gap: 0.66rem;
+    padding: 0.85rem 1rem;
     overflow: hidden;
     box-sizing: border-box;
-    background: var(--color-bg);
+    background: var(--color-surface);
     border: 1px solid var(--color-outline-variant);
     /* The window itself is transparent, so this radius is the widget's outline */
     border-radius: 0.75rem;
   }
 
-  /* Progress rail — 3px, accent fill. Deliberately not transitioned: the time
-     arrives once a second, and easing it leaves the bar trailing the clock. */
   .np-rail {
+    position: relative;
     flex-shrink: 0;
-    height: 3px;
-    background: var(--color-outline-variant);
+    height: 0.35rem;
+    border-radius: 1rem;
+    background: var(--color-surface-highest);
+  }
+
+  .np-rail input {
+    position: absolute;
+    inset: -0.4rem 0;
+    width: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .np-rail:focus-within {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 3px;
   }
 
   .np-rail-fill {
     height: 100%;
+    border-radius: inherit;
     background: var(--color-primary);
   }
 
   .np-body {
-    flex: 1;
-    min-height: 0;
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    padding: 0 0.875rem;
+    padding-right: 1rem;
   }
 
   .np-cover {
@@ -246,7 +265,7 @@
   }
 
   .np-title {
-    font: 600 1rem/1.15 var(--font-headline);
+    font: 600 1.36rem/1.15 var(--font-headline);
     color: var(--color-text);
   }
 
@@ -311,6 +330,7 @@
     display: flex;
     align-items: center;
     gap: 0.375rem;
+    justify-content: center;
     flex-shrink: 0;
   }
 </style>

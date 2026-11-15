@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { audioStore, seek, seekToChapter, goToTrack } from "../../stores/audioStore";
+  import { audioStore, jumpToBookmark, seekToChapter, goToTrack } from "../../stores/audioStore";
   import { bookmarkStore, removeBookmark } from "../../stores/bookmarkStore";
   import { formatTimeShort } from "../../utils/format";
   import { motionReduced } from "../../utils/motion";
-  import type { BookMeta } from "../../types";
+  import type { BookMeta, Bookmark } from "../../types";
 
   /** Chapters (or tracks for multi-file books) + the bookmarks list below. */
   interface Props {
@@ -24,6 +24,20 @@
   let isMultiFile = $derived(book.tracks.length > 1);
   let bookmarks = $derived($bookmarkStore[book.filePath] || []);
   let hasList = $derived(isMultiFile || $audioStore.chapters.length > 0);
+  let marksByRow = $derived.by(() => {
+    const groups = new Map<number, Bookmark[]>();
+    const chapters = $audioStore.chapters;
+    for (const mark of bookmarks) {
+      const row = isMultiFile
+        ? mark.trackIndex ?? 0
+        : Math.max(0, chapters.findLastIndex((chapter) => chapter.startTimeMs <= mark.position * 1000));
+      const list = groups.get(row) ?? [];
+      list.push(mark);
+      groups.set(row, list);
+    }
+    for (const list of groups.values()) list.sort((a, b) => a.position - b.position);
+    return groups;
+  });
 
   let paneEl = $state<HTMLDivElement | null>(null);
   let activeIndex = $derived(
@@ -38,7 +52,9 @@
   $effect(() => {
     const pane = paneEl;
     const key = `${book.filePath}:${activeIndex}`;
-    const rows = isMultiFile ? book.tracks.length : visibleChapterIndices.length;
+    const rows = isMultiFile
+      ? book.tracks.length - (unplayedOnly ? $audioStore.currentTrackIndex : 0)
+      : visibleChapterIndices.length;
     if (!pane || rows === 0 || key === scrolledKey) return;
 
     const row = pane.querySelector<HTMLElement>(".pv-chapter-row.active");
@@ -52,25 +68,29 @@
     });
   });
 
-  function seekToBookmark(position: number, trackIndex: number) {
-    if (isMultiFile && trackIndex !== $audioStore.currentTrackIndex) {
-      goToTrack(trackIndex);
-      const audio = document.querySelector("audio");
-      if (audio) {
-        audio.addEventListener("loadedmetadata", () => {
-          seek(position);
-        }, { once: true });
-      }
-    } else {
-      seek(position);
-    }
-  }
 </script>
+
+{#snippet rowBookmarks(index: number)}
+  {#if marksByRow.has(index)}
+    <ul class="pv-inline-marks" aria-label="Bookmarks in this chapter or track">
+      {#each marksByRow.get(index) ?? [] as mark (mark.id)}
+        <li>
+          <button class="pv-mark" onclick={() => jumpToBookmark(mark.position, mark.trackIndex)}
+            title="Jump to bookmark at {formatTimeShort(mark.position)}">
+            <span class="material-symbols-outlined" aria-hidden="true">bookmark</span>
+            <span>{mark.name}</span>
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
+{/snippet}
 
 <div class="pv-chapters-pane" bind:this={paneEl}>
   {#if isMultiFile}
     <ul class="pv-chapter-list">
       {#each book.tracks as track, i (i)}
+        {#if !unplayedOnly || i >= $audioStore.currentTrackIndex}
         {@const played = i < $audioStore.currentTrackIndex}
         {@const active = i === $audioStore.currentTrackIndex}
         <li>
@@ -89,7 +109,9 @@
               <span class="pv-chapter-time mono">{formatTimeShort(track.duration)}</span>
             {/if}
           </button>
+          {@render rowBookmarks(i)}
         </li>
+        {/if}
       {/each}
     </ul>
   {:else if $audioStore.chapters.length > 0}
@@ -112,6 +134,7 @@
             <span class="pv-chapter-title">{chapter.title}</span>
             <span class="pv-chapter-time mono">{formatTimeShort(chapter.startTimeMs / 1000)}</span>
           </button>
+          {@render rowBookmarks(i)}
         </li>
       {/each}
     </ul>
@@ -132,7 +155,7 @@
           <button
             class="pv-chapter-row"
             data-press="none"
-            onclick={() => seekToBookmark(bm.position, bm.trackIndex)}
+            onclick={() => jumpToBookmark(bm.position, bm.trackIndex)}
           >
             <span class="material-symbols-outlined pv-chapter-marker">bookmark</span>
             <span class="pv-chapter-title">{bm.name}</span>
@@ -153,6 +176,35 @@
 </div>
 
 <style>
+  .pv-inline-marks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin: 0 0 0.25rem 2.9rem;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pv-inline-marks li { min-width: 0; }
+
+  .pv-mark {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    padding: 0.16rem 0.45rem;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    color: var(--color-primary);
+    font: inherit;
+    font-size: 0.74rem;
+    cursor: pointer;
+  }
+
+  .pv-mark:hover { background: var(--color-surface-high); }
+  .pv-mark .material-symbols-outlined { font-size: 0.9rem; }
+  .pv-mark span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pv-chapters-pane {
     padding: 0.4rem 0.9rem 1rem;
   }

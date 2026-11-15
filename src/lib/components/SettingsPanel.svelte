@@ -1,7 +1,8 @@
 <script lang="ts">
   import { applyAudioSettings } from "../stores/audioStore";
   import { DEFAULT_AUDIO_SETTINGS } from "../stores/userdataStore";
-  import type { AppTheme, FontScale, FontFamily } from "../types";
+  import type { AppTheme, FontScale, FontFamily, UserPreferences } from "../types";
+  import { STREAM_DECK_SHORTCUTS } from "../desktop/streamDeck";
   import { setPreference } from "../stores/userdataStore";
   import { THEME_PRESETS } from "../themes";
   import { open as shellOpen } from "@tauri-apps/plugin-shell";
@@ -23,10 +24,11 @@
     fontFamily: FontFamily;
     reduceMotion: boolean;
     autoGroupFiles: boolean;
+    desktop: Pick<UserPreferences, "trayIcon" | "closeToTray" | "trayClicks" | "streamDeckShortcuts">;
     onclose: () => void;
   }
 
-  let { open, theme, colorTheme, fontScale, fontFamily, reduceMotion, autoGroupFiles, onclose }: Props = $props();
+  let { open, theme, colorTheme, fontScale, fontFamily, reduceMotion, autoGroupFiles, desktop, onclose }: Props = $props();
 
   let removedCount = $derived(($libraryStore.hidden ?? []).length);
 
@@ -159,6 +161,46 @@
     </div>
 
     <div class="section">
+      <h3 class="section-label">Windows notification area</h3>
+      <label class="desktop-option">
+        <input type="checkbox" checked={desktop.trayIcon}
+          onchange={(e) => setPreference("trayIcon", e.currentTarget.checked)} />
+        Show ABPlayer next to the clock
+      </label>
+      <label class="desktop-option">
+        <input type="checkbox" checked={desktop.closeToTray} disabled={!desktop.trayIcon}
+          onchange={(e) => setPreference("closeToTray", e.currentTarget.checked)} />
+        Hide the main window when I click ×
+      </label>
+      <label class="desktop-option">
+        Open mini player with
+        <select disabled={!desktop.trayIcon} value={desktop.trayClicks}
+          onchange={(e) => setPreference("trayClicks", e.currentTarget.value === "2" ? 2 : 1)}>
+          <option value={1}>Single click</option>
+          <option value={2}>Double click</option>
+        </select>
+      </label>
+      <p class="section-hint">Right-click the tray icon to reopen ABPlayer or quit.</p>
+    </div>
+
+    <div class="section">
+      <h3 class="section-label">Stream Deck</h3>
+      <label class="desktop-option">
+        <input type="checkbox" checked={desktop.streamDeckShortcuts}
+          onchange={(e) => setPreference("streamDeckShortcuts", e.currentTarget.checked)} />
+        Enable global Stream Deck shortcuts
+      </label>
+      {#if desktop.streamDeckShortcuts}
+        <dl class="shortcut-list">
+          {#each STREAM_DECK_SHORTCUTS as shortcut (shortcut.key)}
+            <dt>{shortcut.label}</dt>
+            <dd><kbd>Ctrl+Alt+Shift+{shortcut.key}</kbd></dd>
+          {/each}
+        </dl>
+      {/if}
+    </div>
+
+    <div class="section">
       <h3 class="section-label">Chapter files</h3>
       <p class="section-hint">
         Books stored as one file per chapter: loose files in a library folder that share an album
@@ -242,6 +284,24 @@
 {/if}
 
 <style>
+  .desktop-option {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    min-height: 1.9rem;
+    font-size: var(--font-size-sm);
+  }
+  .desktop-option input { accent-color: var(--color-primary); }
+  .desktop-option select {
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-md);
+    padding: 0.25rem;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font: inherit;
+  }
+  .shortcut-list { display: grid; grid-template-columns: 1fr auto; gap: 0.25rem; font-size: var(--font-size-sm); }
+  .shortcut-list dd { margin: 0; }
   .backdrop {
     position: fixed;
     inset: 0;

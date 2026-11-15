@@ -70,6 +70,10 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   eqPresets: [],
   reduceMotion: false,
   autoGroupFiles: true,
+  trayIcon: false,
+  closeToTray: false,
+  trayClicks: 1,
+  streamDeckShortcuts: false,
 };
 
 /** A blank record, so views can render a book that has no saved data yet. */
@@ -168,6 +172,10 @@ export async function loadUserData(): Promise<void> {
       eqPresets: normalizeEqPresets(loadedPrefs?.eqPresets),
       reduceMotion: loadedPrefs?.reduceMotion === true,
       autoGroupFiles: loadedPrefs?.autoGroupFiles !== false,
+      trayIcon: loadedPrefs?.trayIcon === true,
+      closeToTray: loadedPrefs?.closeToTray === true,
+      trayClicks: loadedPrefs?.trayClicks === 2 ? 2 : 1,
+      streamDeckShortcuts: loadedPrefs?.streamDeckShortcuts === true,
     };
 
     userdataStore.set({ books, collections, preferences });

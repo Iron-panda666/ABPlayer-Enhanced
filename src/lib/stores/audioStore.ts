@@ -148,7 +148,7 @@ export function getAudioElement(): HTMLAudioElement {
           ...s,
           currentTime: time,
           duration: dur || s.duration,
-          currentChapterIndex: findCurrentChapter(s.chapters, time),
+          currentChapterIndex: s.totalTracks > 1 ? s.currentTrackIndex : findCurrentChapter(s.chapters, time),
         };
       });
     });
@@ -268,17 +268,22 @@ function safePlay(audio: HTMLAudioElement): void {
 }
 
 /** Load a specific track of a book into the audio element and play. */
-function playTrack(book: BookMeta, trackIndex: number): void {
+function playTrack(book: BookMeta, trackIndex: number, position = 0): void {
   const audio = getAudioElement();
   const filePath = getTrackFilePath(book, trackIndex);
   const src = audioSrc(filePath);
   audio.src = src;
+  // Before metadata is ready, setting currentTime specifies the start offset.
+  audio.currentTime = position;
   audio.playbackRate = get(audioStore).speed;
 
   audioStore.update((s) => ({
     ...s,
     currentTrackIndex: trackIndex,
-    currentTime: 0,
+    currentChapterIndex: trackIndex,
+    currentTime: position,
+    duration: book.tracks[trackIndex]?.duration || 0,
+    abRepeat: null,
   }));
 
   safePlay(audio);
@@ -366,38 +371,20 @@ async function loadBookInner(book: BookMeta): Promise<void> {
   const src = audioSrc(firstFile);
   audio.src = src;
   audio.playbackRate = get(audioStore).speed;
+  startAutoSaveForCurrent();
 
   // Continue where the book was left off; no dialog (the library card and
   // the player both offer "Start over" instead).
   void getResumePoint(book.filePath).then(({ position, trackIndex }) => {
     // A newer load may have started while this promise was in flight.
-    if (get(audioStore).currentBook?.filePath !== book.filePath) return;
-
-    if (position <= 0) {
-      audio.currentTime = 0;
-      safePlay(audio);
-      startAutoSaveForCurrent();
-      return;
-    }
+    if (get(audioStore).currentBook?.filePath !== book.filePath || audio.src !== src) return;
 
     if (isMultiFile(book) && trackIndex > 0 && trackIndex < book.tracks.length) {
-      const trackFile = getTrackFilePath(book, trackIndex);
-      audio.src = audioSrc(trackFile);
-      audio.playbackRate = get(audioStore).speed;
-      audioStore.update((s) => ({ ...s, currentTrackIndex: trackIndex }));
-      audio.addEventListener(
-        "loadedmetadata",
-        () => {
-          audio.currentTime = position;
-          safePlay(audio);
-        },
-        { once: true },
-      );
+      playTrack(book, trackIndex, Math.max(0, position));
     } else {
-      audio.currentTime = position;
+      audio.currentTime = Math.max(0, position);
       safePlay(audio);
     }
-    startAutoSaveForCurrent();
   }).catch((e: unknown) => {
     const msg = (e as { message?: string } | null)?.message || "Could not read the saved position";
     audioStore.update((s) => ({ ...s, error: msg }));
@@ -595,12 +582,41 @@ export function seekToChapter(index: number): void {
 }
 
 /** Jump to a specific track in a multi-file book. */
-export function goToTrack(trackIndex: number): void {
+export function goToTrack(trackIndex: number, position = 0): void {
   const state = get(audioStore);
   if (state.currentBook && isMultiFile(state.currentBook)) {
     if (trackIndex >= 0 && trackIndex < state.currentBook.tracks.length) {
-      playTrack(state.currentBook, trackIndex);
+      playTrack(state.currentBook, trackIndex, position);
     }
+  }
+}
+
+export function chapterNavigation(state: AudioState) {
+  const multiFile = state.totalTracks > 1;
+  const index = multiFile ? state.currentTrackIndex : state.currentChapterIndex;
+  const count = multiFile ? state.totalTracks : state.chapters.length;
+  return {
+    index,
+    previous: index > 0 && index < count,
+    next: count > 0 && index + 1 < count,
+  };
+}
+
+export function stepChapter(direction: -1 | 1): void {
+  const state = get(audioStore);
+  const navigation = chapterNavigation(state);
+  if (direction < 0 ? !navigation.previous : !navigation.next) return;
+  const target = navigation.index + direction;
+  if (state.totalTracks > 1) goToTrack(target);
+  else seekToChapter(target);
+}
+
+export function jumpToBookmark(position: number, trackIndex = 0): void {
+  const state = get(audioStore);
+  if (state.totalTracks > 1 && trackIndex !== state.currentTrackIndex) {
+    goToTrack(trackIndex, position);
+  } else {
+    seek(position);
   }
 }
 

@@ -17,6 +17,7 @@
     unassignBook,
   } from "../stores/tierListStore";
   import Modal from "./Modal.svelte";
+  import BookMetadataLookup from "./BookMetadataLookup.svelte";
   import { TierChip } from "./ui";
 
   type Mode = "edit" | "create";
@@ -313,6 +314,18 @@
       {coverPreview ? "Change Cover" : "Add Cover"}
     </button>
   </div>
+
+  <BookMetadataLookup
+    queryForBook={() => [
+      titleInput.trim() || book?.title,
+      authorInput.trim() || (book?.author === "Unknown Author" ? "" : book?.author),
+    ].filter(Boolean).join(" ").slice(0, 220)}
+    onapply={({ title, author, firstPublished }) => {
+      if (title) titleInput = title;
+      if (author) authorInput = author;
+      if (firstPublished) publishYearInput = firstPublished;
+    }}
+  />
 
   <div class="field">
     <label class="label" for="edit-title">Title {#if mode === "create"}<span class="req">*</span>{/if}</label>

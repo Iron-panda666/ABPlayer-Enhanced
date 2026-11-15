@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { get } from "svelte/store";
-  import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getCurrentWindow, monitorFromPoint } from "@tauri-apps/api/window";
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
-  import { LogicalSize } from "@tauri-apps/api/dpi";
-  import { emit, listen } from "@tauri-apps/api/event";
+  import { LogicalSize, PhysicalPosition } from "@tauri-apps/api/dpi";
+  import { emitTo, listen } from "@tauri-apps/api/event";
+  import { isTauri } from "@tauri-apps/api/core";
+  import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
   import Library from "./lib/components/Library.svelte";
   import PlayerView from "./lib/components/PlayerView.svelte";
   import TiersView from "./lib/components/TiersView.svelte";
@@ -13,12 +15,16 @@
   import ShortcutsSheet from "./lib/components/ShortcutsSheet.svelte";
   import { showToast } from "./lib/stores/toastStore";
   import { initMediaSession } from "./lib/stores/mediaSession";
-  import { audioStore, togglePlay, skip, seek, setVolume, toggleMute, applyAudioSettings } from "./lib/stores/audioStore";
-  import { userdataStore, loadUserData, getDisplayTitle } from "./lib/stores/userdataStore";
+  import { audioStore, togglePlay, skip, seek, setVolume, toggleMute, applyAudioSettings, chapterNavigation, stepChapter, setSpeed, applyEqPreset, setSleepTimer, setSleepEndOfChapter, cancelSleepTimer } from "./lib/stores/audioStore";
+  import { userdataStore, loadUserData, getDisplayTitle, getDisplayAuthor, getDisplayCover } from "./lib/stores/userdataStore";
   import { loadBookmarks } from "./lib/stores/bookmarkStore";
   import { loadStatistics } from "./lib/stores/statisticsStore";
   import { loadTierLists } from "./lib/stores/tierListStore";
   import { THEME_PRESETS } from "./lib/themes";
+  import { initTray } from "./lib/desktop/tray";
+  import { initStreamDeckShortcuts, markCurrentPosition } from "./lib/desktop/streamDeck";
+  import { MINI_HEIGHT, MINI_WIDTH, type MiniCommand, type MiniState } from "./lib/desktop/miniPlayer";
+  import { BUILT_IN_EQ_PRESETS, findPreset } from "./lib/utils/eqPresets";
   import type { AppView } from "./lib/types";
 
   let activeView = $state<AppView>("library");
@@ -40,7 +46,7 @@
     window.addEventListener("keydown", (e) => {
       // Don't handle shortcuts when typing in an input
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key) {
         case "Escape":
@@ -83,138 +89,143 @@
       }
     });
 
-    // Register global shortcuts (work even when app is not focused)
-    import("@tauri-apps/plugin-global-shortcut").then(({ register, unregisterAll }) => {
-      register("CommandOrControl+Shift+P", (e) => {
-        if (e.state === "Pressed" && $audioStore.currentBook) togglePlay();
-      }).catch((e) => console.warn("Failed to register Ctrl+Shift+P:", e));
-      register("CommandOrControl+Shift+M", (e) => {
-        if (e.state === "Pressed") openMiniPlayer();
-      }).catch((e) => console.warn("Failed to register Ctrl+Shift+M:", e));
-
-      // Unregister all on window close
-      window.addEventListener("beforeunload", () => {
-        unregisterAll().catch(() => {});
-      });
+    if (!isTauri()) return;
+    const stopTray = initTray(openMiniPlayer).catch((error) => {
+      console.warn("Could not initialize the tray:", error);
     });
-
-    // Listen for commands from mini player
-    listen<{ action: string; time?: number }>("mini-player-command", (event) => {
-      const { action, time } = event.payload;
-      if (action === "toggle-play") togglePlay();
-      else if (action === "skip-forward") skip(30);
-      else if (action === "skip-back") skip(-30);
-      else if (action === "seek" && typeof time === "number" && Number.isFinite(time)) seek(time);
+    const stopStreamDeck = initStreamDeckShortcuts();
+    register("CommandOrControl+Shift+P", (e) => {
+      if (e.state === "Pressed" && $audioStore.currentBook && !$audioStore.currentBook.fileless) togglePlay();
+    }).catch((e) => console.warn("Failed to register Ctrl+Shift+P:", e));
+    register("CommandOrControl+Shift+M", (e) => {
+      if (e.state === "Pressed") void openMiniPlayer().catch(console.warn);
+    }).catch((e) => console.warn("Failed to register Ctrl+Shift+M:", e));
+    const abort = new AbortController();
+    window.addEventListener("beforeunload", () => {
+      unregisterAll().catch(() => {});
+    }, { once: true, signal: abort.signal });
+    const unlisten = listen<MiniCommand>("mini-player-command", ({ payload }) => {
+      if (payload.action === "ready") {
+        miniReady = true;
+        sendMiniState();
+        return;
+      }
+      const book = get(audioStore).currentBook;
+      if (!book || book.fileless) return;
+      switch (payload.action) {
+        case "toggle-play": togglePlay(); break;
+        case "skip-forward": skip(30); break;
+        case "skip-back": skip(-30); break;
+        case "previous": stepChapter(-1); break;
+        case "next": stepChapter(1); break;
+        case "seek": if (Number.isFinite(payload.value)) seek(payload.value); break;
+        case "volume": if (Number.isFinite(payload.value)) setVolume(payload.value); break;
+        case "speed": if (payload.value >= 0.25 && payload.value <= 4) setSpeed(payload.value); break;
+        case "mute": toggleMute(); break;
+        case "bookmark": void markCurrentPosition(); break;
+        case "sleep":
+          if (payload.value === "off") cancelSleepTimer();
+          else if (payload.value === "chapter") setSleepEndOfChapter();
+          else if ([15, 30, 60].includes(payload.value)) setSleepTimer(payload.value);
+          break;
+        case "eq": {
+          const preset = [...BUILT_IN_EQ_PRESETS, ...get(userdataStore).preferences.eqPresets]
+            .find((option) => option.name === payload.value);
+          if (preset) applyEqPreset(preset);
+          break;
+        }
+      }
     });
+    return () => {
+      abort.abort();
+      stopStreamDeck();
+      void stopTray.then((stop) => stop?.());
+      void unlisten.then((stop) => stop()).catch(console.warn);
+    };
   });
 
-  // Emit state to mini player — throttled to 1x/sec for time, immediate for play/loading state
-  let miniEmitTimer: ReturnType<typeof setTimeout> | null = null;
-  let lastMiniEmitPlaying: boolean | null = null;
-  let lastMiniEmitLoading: boolean | null = null;
-  let lastMiniEmitError: string | null = null;
+  let miniReady = $state(false);
+  let miniTimer: ReturnType<typeof setTimeout> | undefined;
+  let miniOpening: Promise<void> | null = null;
+  let miniState = $derived.by((): MiniState => {
+    const audio = $audioStore;
+    const book = audio.currentBook?.fileless ? null : audio.currentBook;
+    const prefs = $userdataStore.preferences;
+    const ud = book ? $userdataStore.books[book.filePath] : undefined;
+    const navigation = chapterNavigation(audio);
+    const preset = THEME_PRESETS.find((theme) => theme.id === prefs.colorTheme) ?? THEME_PRESETS[0];
+    const isDark = prefs.theme === "dark";
+    const eq = findPreset(prefs.eqPresets, { bass: audio.eqBass, mid: audio.eqMid, treble: audio.eqTreble });
+    const sleepMinutes = audio.sleepTimerMode === "end-of-chapter" ? "chapter"
+      : audio.sleepTimerRemaining !== null ? Math.max(1, Math.ceil(audio.sleepTimerRemaining / 60)) : "off";
+    return {
+      playing: !!book && audio.playing, loading: !!book && audio.loading,
+      currentTime: book ? audio.currentTime : 0, duration: book ? audio.duration : 0,
+      title: book ? getDisplayTitle(book, ud) : "",
+      author: book ? getDisplayAuthor(book, ud) : "",
+      coverArt: book ? getDisplayCover(book, ud) : null,
+      chapter: audio.totalTracks > 1 ? `Track ${audio.currentTrackIndex + 1} of ${audio.totalTracks}`
+        : audio.currentChapterIndex >= 0 ? `Ch ${audio.currentChapterIndex + 1} of ${audio.chapters.length}` : "",
+      previous: navigation.previous, next: navigation.next,
+      speed: audio.speed, volume: audio.volume, muted: audio.muted, sleepMinutes,
+      eq: eq?.name ?? "Custom", eqPresets: [...BUILT_IN_EQ_PRESETS, ...prefs.eqPresets].map((option) => option.name),
+      error: book ? audio.error : null, isDark, primary: (isDark ? preset.dark : preset.light).primary,
+      fontFamily: prefs.fontFamily,
+    };
+  });
+
+  function sendMiniState(state = miniState) {
+    void emitTo("mini-player", "mini-player-state", state).catch(console.warn);
+  }
 
   $effect(() => {
-    const book = $audioStore.currentBook;
-    const playing = $audioStore.playing;
-    const loading = $audioStore.loading;
-    const currentTime = $audioStore.currentTime;
-    const duration = $audioStore.duration;
-    const speed = $audioStore.speed;
-    const error = $audioStore.error;
-    const chapters = $audioStore.chapters;
-    const chapterIndex = $audioStore.currentChapterIndex;
-    const trackIndex = $audioStore.currentTrackIndex;
-    const totalTracks = $audioStore.totalTracks;
-
-    if (!book) return;
-
-    const userData = $userdataStore.books[book.filePath];
-    const prefs = $userdataStore.preferences;
-    const preset = THEME_PRESETS.find((t) => t.id === prefs.colorTheme) || THEME_PRESETS[0];
-    const themeColors = prefs.theme === "dark" ? preset.dark : preset.light;
-    const payload = {
-      playing,
-      loading,
-      currentTime,
-      duration,
-      title: userData?.titleOverride || book.title,
-      author: userData?.authorOverride || book.author,
-      coverArt: userData?.coverArtOverride || book.coverArt,
-      speed,
-      // Opens the mini player's subtitle line: where you are in a book made of
-      // several files, else the chapter of the one file.
-      chapter:
-        totalTracks > 1
-          ? `Track ${trackIndex + 1}/${totalTracks}`
-          : chapters.length > 0 && chapterIndex >= 0
-            ? `Ch ${chapterIndex + 1}`
-            : "",
-      error,
-      isDark: prefs.theme === "dark",
-      primary: themeColors.primary,
-    };
-
-    // Emit immediately for play/pause or loading changes — the spinner needs
-    // to appear in the mini-player the instant the user clicks play, not
-    // up to a second later when the throttled timer fires.
-    if (
-      playing !== lastMiniEmitPlaying ||
-      loading !== lastMiniEmitLoading ||
-      error !== lastMiniEmitError
-    ) {
-      lastMiniEmitPlaying = playing;
-      lastMiniEmitLoading = loading;
-      lastMiniEmitError = error;
-      emit("mini-player-state", payload);
-      return;
-    }
-
-    // Throttle time updates to 1/sec
-    if (!miniEmitTimer) {
-      miniEmitTimer = setTimeout(() => {
-        miniEmitTimer = null;
-        emit("mini-player-state", payload);
-      }, 1000);
+    if (!miniReady) return;
+    const state = miniState;
+    if (!miniTimer) {
+      miniTimer = setTimeout(() => {
+        miniTimer = undefined;
+        if (miniReady) sendMiniState();
+      }, state.loading ? 0 : 180);
     }
   });
 
-  /** The mini player's frame size (handoff 1g); the window never resizes. */
-  const MINI_W = 360;
-  const MINI_H = 104;
+  function openMiniPlayer(anchor?: PhysicalPosition): Promise<void> {
+    miniOpening ??= showMiniPlayer(anchor).finally(() => { miniOpening = null; });
+    return miniOpening;
+  }
 
-  async function openMiniPlayer() {
-    // Check if mini player already exists
+  async function showMiniPlayer(anchor?: PhysicalPosition) {
     const existing = await WebviewWindow.getByLabel("mini-player");
     if (existing) {
+      await existing.show();
       await existing.setFocus();
       return;
     }
-
+    miniReady = false;
     const mini = new WebviewWindow("mini-player", {
-      url: "/mini-player.html",
-      title: "ABPlayer Mini",
-      width: MINI_W,
-      height: MINI_H,
-      resizable: false,
-      alwaysOnTop: true,
-      decorations: false,
-      // The strip has rounded corners; without this they would be filled in
-      transparent: true,
-      skipTaskbar: true,
+      url: "/mini-player.html", title: "ABPlayer Mini", width: MINI_WIDTH, height: MINI_HEIGHT,
+      resizable: false, alwaysOnTop: true, decorations: false, transparent: true, skipTaskbar: true,
+      visible: false,
     });
-
-    mini.once("tauri://created", () => {
-      // The window-state plugin restores the size this window had last time,
-      // overriding the one above — which for anyone who used 1.6 is the old
-      // 320×88. The layout is fixed, so put it back. Position is left alone:
-      // where the user parked the widget is worth remembering.
-      mini.setSize(new LogicalSize(MINI_W, MINI_H)).catch(() => {});
+    await new Promise<void>((resolve, reject) => {
+      void mini.once("tauri://error", (event) => reject(event.payload));
+      void mini.once("tauri://created", () => resolve());
     });
-
-    mini.once("tauri://error", (e) => {
-      console.error("Mini player creation error:", e);
-    });
+    void mini.once("tauri://destroyed", () => { miniReady = false; }).catch(console.warn);
+    try {
+      await mini.setSize(new LogicalSize(MINI_WIDTH, MINI_HEIGHT));
+      const monitor = anchor ? await monitorFromPoint(anchor.x, anchor.y) : null;
+      if (monitor) {
+        const area = monitor.workArea;
+        const x = area.position.x + area.size.width - Math.ceil((MINI_WIDTH + 12) * monitor.scaleFactor);
+        const y = area.position.y + area.size.height - Math.ceil((MINI_HEIGHT + 12) * monitor.scaleFactor);
+        await mini.setPosition(new PhysicalPosition(Math.max(area.position.x, x), Math.max(area.position.y, y)));
+      }
+    } catch (error) {
+      console.warn("Could not position the mini player:", error);
+    }
+    await mini.show();
+    await mini.setFocus();
   }
 
   // Auto-switch to player only when a NEW book is loaded (not when returning from library)
@@ -311,7 +322,8 @@
       {:else if activeView === "tiers"}
         <TiersView />
       {:else}
-        <PlayerView onback={() => (activeView = "library")} onminiplayer={openMiniPlayer} />
+        <PlayerView onback={() => (activeView = "library")}
+          onminiplayer={() => void openMiniPlayer().catch(console.warn)} />
       {/if}
     </div>
 
@@ -327,6 +339,7 @@
     fontFamily={$userdataStore.preferences.fontFamily || "editorial"}
     reduceMotion={$userdataStore.preferences.reduceMotion}
     autoGroupFiles={$userdataStore.preferences.autoGroupFiles !== false}
+    desktop={$userdataStore.preferences}
     onclose={() => (settingsOpen = false)}
   />
 

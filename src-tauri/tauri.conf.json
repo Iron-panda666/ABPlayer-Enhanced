@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nickkuk/nickkuk.github.io/master/tauri-v2-schema/tauri.conf.json",
-  "productName": "ABPlayer",
+  "productName": "ABPlayer Fork",
   "version": "1.7.0",
-  "identifier": "com.abplayer.app",
+  "identifier": "com.ironpanda666.abplayer",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -21,7 +21,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' asset: http://asset.localhost https://asset.localhost audiostream: http://audiostream.localhost https://audiostream.localhost; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src * blob:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost asset: http://asset.localhost https://asset.localhost audiostream: http://audiostream.localhost https://audiostream.localhost; object-src 'none'; base-uri 'self'",
+      "csp": "default-src 'self' asset: http://asset.localhost https://asset.localhost audiostream: http://audiostream.localhost https://audiostream.localhost; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost https://asset.localhost data: blob:; media-src * blob:; connect-src 'self' ipc: http://ipc.localhost https://ipc.localhost asset: http://asset.localhost https://asset.localhost audiostream: http://audiostream.localhost https://audiostream.localhost https://openlibrary.org; object-src 'none'; base-uri 'self'",
       "assetProtocol": {
         "enable": true,
         "scope": {

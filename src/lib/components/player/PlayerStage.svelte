@@ -13,6 +13,8 @@
     audioStore,
     togglePlay,
     skip,
+    chapterNavigation,
+    stepChapter,
     seek,
     setVolume,
     toggleMute,
@@ -68,11 +70,12 @@
   // ---- chapter scoping: the waveform seeks within the current chapter ----
   let chapters = $derived($audioStore.chapters);
   let chapterIndex = $derived($audioStore.currentChapterIndex);
+  let navigation = $derived(chapterNavigation($audioStore));
   let chapterStart = $derived(
-    chapters.length > 0 && chapterIndex >= 0 ? chapters[chapterIndex].startTimeMs / 1000 : 0,
+    !isMultiFile && chapterIndex >= 0 ? (chapters[chapterIndex]?.startTimeMs ?? 0) / 1000 : 0,
   );
   let chapterEnd = $derived.by(() => {
-    if (chapters.length === 0 || chapterIndex < 0) return $audioStore.duration;
+    if (isMultiFile || chapters.length === 0 || chapterIndex < 0) return $audioStore.duration;
     const next = chapters[chapterIndex + 1];
     return next ? next.startTimeMs / 1000 : $audioStore.duration;
   });
@@ -254,6 +257,13 @@
 
     <div class="ps-transport">
       <IconButton
+        icon="skip_previous"
+        label="Previous chapter or track"
+        size={short ? "2.1rem" : "2.5rem"}
+        disabled={!navigation.previous}
+        onclick={() => stepChapter(-1)}
+      />
+      <IconButton
         icon="replay_30"
         label="Back 30 seconds"
         size={short ? "2.1rem" : "2.5rem"}
@@ -270,6 +280,13 @@
         label="Forward 30 seconds"
         size={short ? "2.1rem" : "2.5rem"}
         onclick={() => skip(30)}
+      />
+      <IconButton
+        icon="skip_next"
+        label="Next chapter or track"
+        size={short ? "2.1rem" : "2.5rem"}
+        disabled={!navigation.next}
+        onclick={() => stepChapter(1)}
       />
     </div>
 
@@ -519,7 +536,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1.1rem;
+    gap: clamp(0.25rem, 1.75cqi, 0.75rem);
   }
 
   .ps-preparing {

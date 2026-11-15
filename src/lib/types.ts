@@ -210,6 +210,10 @@ export interface UserPreferences {
   reduceMotion: boolean;
   /** Fold loose chapter files that share an album or file name into one book when scanning. */
   autoGroupFiles: boolean;
+  trayIcon: boolean;
+  closeToTray: boolean;
+  trayClicks: 1 | 2;
+  streamDeckShortcuts: boolean;
 }
 
 export interface UserDataStore {

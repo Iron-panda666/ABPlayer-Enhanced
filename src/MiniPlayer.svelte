@@ -1,157 +1,167 @@
 <script lang="ts">
-  /**
-   * The always-on-top mini window (handoff 1g, 360×104). It is a separate
-   * webview with no access to the stores, so the main window pushes it a
-   * state payload and it pushes back commands. The strip itself is the
-   * NowPlaying component, which is also the window's title bar: everything in
-   * it that is not a control is a drag region.
-   *
-   * The window is created transparent (App.svelte), so the strip's rounded
-   * corners are the real outline of the widget rather than a radius painted
-   * over an opaque square.
-   */
   import { onMount } from "svelte";
-  import { listen, emit } from "@tauri-apps/api/event";
+  import { isTauri } from "@tauri-apps/api/core";
+  import { emitTo, listen } from "@tauri-apps/api/event";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import NowPlaying from "./lib/components/NowPlaying.svelte";
-
-  interface MiniState {
-    playing: boolean;
-    loading: boolean;
-    currentTime: number;
-    duration: number;
-    title: string;
-    author: string;
-    coverArt: string | null;
-    speed: number;
-    /** "Ch 10" / "Track 2/14", already formatted by the main window. */
-    chapter: string;
-    /** The main window's playback error, if any — shown here since the
-     *  click that caused it happened here. */
-    error: string | null;
-    isDark: boolean;
-    primary: string;
-  }
+  import { IconButton } from "./lib/components/ui";
+  import { type MiniCommand, type MiniState } from "./lib/desktop/miniPlayer";
+  import { speedOptions } from "./lib/utils/speed";
 
   let state = $state<MiniState>({
-    playing: false,
-    loading: false,
-    currentTime: 0,
-    duration: 0,
-    title: "",
-    author: "",
-    coverArt: null,
-    speed: 1,
-    chapter: "",
-    error: null,
-    isDark: true,
-    primary: "#4db6ac",
+    playing: false, loading: false, currentTime: 0, duration: 0,
+    title: "", author: "", coverArt: null, chapter: "", previous: false, next: false,
+    speed: 1, volume: 1, muted: false, sleepMinutes: "off", eq: "Flat", eqPresets: ["Flat"],
+    error: null, isDark: true, primary: "#4db6ac", fontFamily: "editorial",
   });
 
-  function sendCommand(action: string, time?: number) {
-    emit("mini-player-command", { action, time });
-  }
-
-  async function closeMini() {
-    await getCurrentWindow().close();
+  function send(command: MiniCommand) {
+    void emitTo("main", "mini-player-command", command).catch(console.warn);
   }
 
   onMount(() => {
-    const unlisten = listen<MiniState>("mini-player-state", (event) => {
-      state = event.payload;
+    if (!isTauri()) return;
+    const unlisten = listen<MiniState>("mini-player-state", ({ payload }) => {
+      state = payload;
     });
-
-    return () => {
-      unlisten.then((fn) => fn());
-    };
+    void unlisten.then(() => send({ action: "ready" })).catch(console.warn);
+    return () => { void unlisten.then((stop) => stop()).catch(console.warn); };
   });
 
-  // The window has its own root, so the theme attribute is set here rather
-  // than by App.svelte's preference effect.
   $effect(() => {
     document.documentElement.setAttribute("data-theme", state.isDark ? "dark" : "light");
+    document.documentElement.setAttribute("data-font-family", state.fontFamily);
     document.documentElement.style.setProperty("--color-primary", state.primary);
   });
 
-  let npState = $derived({
-    playing: state.playing,
-    loading: state.loading,
-    currentTime: state.currentTime,
-    duration: state.duration,
+  const sleepOptions = [15, 30, 60];
+  let np = $derived({
+    ...state,
     title: state.title || "No book loaded",
-    author: state.author,
-    coverArt: state.coverArt,
     chapterLabel: state.chapter,
-    speedLabel: state.speed !== 1 ? `${state.speed}×` : "",
-    error: state.error,
+    canPlay: !!state.title,
   });
 </script>
 
 <div class="mp">
   <NowPlaying
-    state={npState}
-    onplay={() => sendCommand("toggle-play")}
-    onskip={(s) => sendCommand(s < 0 ? "skip-back" : "skip-forward")}
-    onseek={(t) => sendCommand("seek", t)}
-  />
-  <button class="mp-close" onclick={closeMini} aria-label="Close the mini player" title="Close">
+    state={np}
+    onplay={() => send({ action: "toggle-play" })}
+    onskip={(seconds) => send({ action: seconds < 0 ? "skip-back" : "skip-forward" })}
+    onstep={(direction) => send({ action: direction < 0 ? "previous" : "next" })}
+    onseek={(value) => send({ action: "seek", value })}
+  >
+    {#snippet extraControls()}
+      <div class="mp-controls">
+        <label class="mp-control" title="Playback speed">
+          <span class="material-symbols-outlined" aria-hidden="true">speed</span>
+          <select aria-label="Playback speed" disabled={!np.canPlay} value={state.speed}
+            onchange={(e) => send({ action: "speed", value: Number(e.currentTarget.value) })}>
+            {#each speedOptions(state.speed) as speed (speed)}
+              <option value={speed}>{speed}×</option>
+            {/each}
+          </select>
+        </label>
+        <div class="mp-control mp-volume">
+          <button type="button" disabled={!np.canPlay} onclick={() => send({ action: "mute" })}
+            aria-label={state.muted ? "Unmute" : "Mute"} title={state.muted ? "Unmute" : "Mute"}>
+            <span class="material-symbols-outlined" aria-hidden="true">{state.muted ? "volume_off" : "volume_up"}</span>
+          </button>
+          <input type="range" min="0" max="100" value={Math.round(state.volume * 100)}
+            disabled={!np.canPlay} aria-label="Volume"
+            oninput={(e) => send({ action: "volume", value: e.currentTarget.valueAsNumber / 100 })} />
+        </div>
+        <label class="mp-control" title="Sleep timer">
+          <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+          <select aria-label="Sleep timer" disabled={!np.canPlay} value={state.sleepMinutes}
+            onchange={(e) => {
+              const choice = e.currentTarget.value;
+              send({ action: "sleep", value: choice === "off" || choice === "chapter" ? choice : Number(choice) });
+            }}>
+            {#if typeof state.sleepMinutes === "number" && !sleepOptions.includes(state.sleepMinutes)}
+              <option value={state.sleepMinutes} disabled>{state.sleepMinutes} min</option>
+            {/if}
+            <option value="off">Off</option>
+            <option value="chapter">Chapter</option>
+            {#each sleepOptions as minutes (minutes)}
+              <option value={minutes}>{minutes} min</option>
+            {/each}
+          </select>
+        </label>
+        <label class="mp-control mp-eq" title="Equalizer preset">
+          <span class="material-symbols-outlined" aria-hidden="true">equalizer</span>
+          <select aria-label="Equalizer preset" disabled={!np.canPlay} value={state.eq}
+            onchange={(e) => send({ action: "eq", value: e.currentTarget.value })}>
+            {#if !state.eqPresets.includes(state.eq)}
+              <option value={state.eq} disabled>{state.eq}</option>
+            {/if}
+            {#each state.eqPresets as preset (preset)}
+              <option value={preset}>{preset}</option>
+            {/each}
+          </select>
+        </label>
+        <IconButton icon="bookmark_add" label="Add bookmark" size="1.9rem" disabled={!np.canPlay}
+          onclick={() => send({ action: "bookmark" })} />
+      </div>
+    {/snippet}
+  </NowPlaying>
+  <button type="button" class="mp-close"
+    onclick={() => void getCurrentWindow().close().catch(console.warn)}
+    aria-label="Close the mini player" title="Close">
     <span class="material-symbols-outlined" aria-hidden="true">close</span>
   </button>
 </div>
 
 <style>
-  /* The window is fixed at 360×104 and never resizes, so the root font-size
-     is pinned instead of following app.css's viewport clamp: 1rem is 16px
-     here, which is the grid the mini-player design is drawn on. `html:root`
-     outranks app.css's `html` whatever order the stylesheets land in. */
-  :global(html:root) {
-    font-size: 16px;
+  :global(html:root) { font-size: 16px; }
+  .mp { position: relative; width: 100%; height: 100%; overflow: hidden; }
+  .mp-controls {
+    display: grid;
+    grid-template-columns: auto minmax(4rem, 1fr) auto minmax(5rem, 1fr) auto;
+    align-items: stretch;
+    gap: 0.3rem;
+    min-width: 0;
   }
-
-  .mp {
-    position: relative;
-    width: 100vw;
-    height: 100vh;
-    /* Transparent window: only the strip's rounded frame is painted */
-    background: transparent;
-    overflow: hidden;
+  .mp-control {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.21rem;
+    padding: 0 0.28rem;
+    border: 1px solid var(--color-outline-variant);
+    border-radius: var(--radius-md);
+    color: var(--color-text-variant);
   }
-
-  /* No decorations, so this is the only way to close the window from itself.
-     Quiet until the pointer is over the strip. */
+  .mp-control > .material-symbols-outlined, .mp-volume button span { font-size: 0.98rem; }
+  .mp-control select {
+    min-width: 0;
+    max-width: 100%;
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: none;
+    font: 500 0.68rem/1 var(--font-label);
+    cursor: pointer;
+  }
+  .mp-eq select { width: 100%; text-overflow: ellipsis; }
+  .mp-volume input { width: 100%; min-width: 0; margin: 0; accent-color: var(--color-primary); }
+  .mp-volume button, .mp-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    padding: 0.12rem;
+    background: none;
+    color: inherit;
+    cursor: pointer;
+  }
   .mp-close {
     position: absolute;
-    top: 0.3rem;
-    right: 0.3rem;
-    z-index: 2;
-    display: flex;
-    padding: 0.1rem;
-    border: none;
+    top: 0.38rem;
+    right: 0.38rem;
     border-radius: 50%;
-    background: none;
-    color: var(--color-outline);
-    cursor: pointer;
-    opacity: 0.35;
-    transition:
-      opacity var(--motion-fast) ease,
-      color var(--motion-fast) ease;
+    color: var(--color-text-variant);
   }
-
-  .mp:hover .mp-close {
-    opacity: 1;
-  }
-
-  .mp-close:hover {
-    color: var(--color-text);
-  }
-
-  .mp-close:focus-visible {
-    opacity: 1;
-    outline: 2px solid var(--color-primary);
-    outline-offset: 1px;
-  }
-
-  .mp-close .material-symbols-outlined {
-    font-size: 0.95rem;
-  }
+  .mp-close .material-symbols-outlined { font-size: 1rem; }
+  .mp-close:hover, .mp-volume button:hover { color: var(--color-text); }
+  .mp-volume button:disabled { opacity: 0.35; cursor: default; }
 </style>
