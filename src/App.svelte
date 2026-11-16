@@ -171,6 +171,7 @@
       eq: eq?.name ?? "Custom", eqPresets: [...BUILT_IN_EQ_PRESETS, ...prefs.eqPresets].map((option) => option.name),
       error: book ? audio.error : null, isDark, primary: (isDark ? preset.dark : preset.light).primary,
       fontFamily: prefs.fontFamily,
+      opacity: prefs.miniOpacity,
     };
   });
 
@@ -203,8 +204,8 @@
     }
     miniReady = false;
     const mini = new WebviewWindow("mini-player", {
-      url: "/mini-player.html", title: "ABPlayer Mini", width: MINI_WIDTH, height: MINI_HEIGHT,
-      resizable: false, alwaysOnTop: true, decorations: false, transparent: true, skipTaskbar: true,
+      url: "/mini-player.html", title: "ABPlayer Fork Mini", width: MINI_WIDTH, height: MINI_HEIGHT,
+      resizable: false, alwaysOnTop: true, decorations: false, transparent: true, shadow: false, skipTaskbar: true,
       visible: false,
     });
     await new Promise<void>((resolve, reject) => {
@@ -286,11 +287,11 @@
         lastTitlePct = pct;
         const userData = $userdataStore.books[book.filePath];
         const name = getDisplayTitle(book, userData);
-        getCurrentWindow().setTitle(`${name} \u2014 ${pct}% | ABPlayer`);
+        getCurrentWindow().setTitle(`${name} \u2014 ${pct}% | ABPlayer Fork`);
       }
     } else if (lastTitlePct !== -1) {
       lastTitlePct = -1;
-      getCurrentWindow().setTitle("ABPlayer");
+      getCurrentWindow().setTitle("ABPlayer Fork");
     }
   });
 </script>
@@ -338,6 +339,8 @@
     fontScale={$userdataStore.preferences.fontScale || "default"}
     fontFamily={$userdataStore.preferences.fontFamily || "editorial"}
     reduceMotion={$userdataStore.preferences.reduceMotion}
+    miniOpacity={$userdataStore.preferences.miniOpacity}
+    audioVisualization={$userdataStore.preferences.audioVisualization}
     autoGroupFiles={$userdataStore.preferences.autoGroupFiles !== false}
     desktop={$userdataStore.preferences}
     onclose={() => (settingsOpen = false)}

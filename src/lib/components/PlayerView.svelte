@@ -12,6 +12,7 @@
     getDisplayTitle,
     getDisplayAuthor,
     getDisplayCover,
+    setPreference,
   } from "../stores/userdataStore";
   import { tierListsStore, defaultTierList, getBookTier } from "../stores/tierListStore";
   import BookRankingCard from "./BookRankingCard.svelte";
@@ -41,6 +42,7 @@
   let author = $derived(book ? getDisplayAuthor(book, userData) : "");
   let cover = $derived(book ? getDisplayCover(book, userData) : null);
   let isFileless = $derived(book?.fileless === true);
+  let expanded = $derived(!isFileless && $userdataStore.preferences.playerExpanded);
   let isMultiFile = $derived(book ? book.tracks.length > 1 : false);
 
   let overallPercent = $derived(
@@ -104,6 +106,12 @@
       <span class="pv-head-right">
         {#if !isFileless}
           <span class="pv-pct mono">{overallPercent}% of book</span>
+          <IconButton
+            icon={expanded ? "close_fullscreen" : "open_in_full"}
+            label={expanded ? "Show book panes" : "Expand player"}
+            selected={expanded}
+            onclick={() => setPreference("playerExpanded", !expanded)}
+          />
         {/if}
         <IconButton
           icon="edit"
@@ -130,9 +138,9 @@
     {/if}
 
     <div class="pv-cols">
-      <PlayerStage {book} {userData} {title} {author} {cover} />
+      <PlayerStage {book} {userData} {title} {author} {cover} {expanded} />
 
-      <div class="pv-side">
+      <div class="pv-side" class:collapsed={expanded}>
         <div class="pv-tabs">
           <div class="pv-seg" role="tablist" aria-label="Book panes">
             {#each TABS as tab (tab.value)}
@@ -276,6 +284,8 @@
     display: flex;
     flex-direction: column;
   }
+
+  .pv-side.collapsed { display: none; }
 
   .pv-tabs {
     display: flex;

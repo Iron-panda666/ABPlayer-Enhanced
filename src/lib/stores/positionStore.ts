@@ -27,10 +27,7 @@ export async function getSavedPosition(
   const entry = await s.get<SavedPosition>(filePath);
   if (!entry) return null;
   // Backcompat: old entries may lack trackIndex
-  if (entry.trackIndex === undefined) {
-    return { ...entry, trackIndex: 0 };
-  }
-  return entry;
+  return { ...entry, lastPlayed: entry.lastPlayed || "", trackIndex: entry.trackIndex ?? 0 };
 }
 
 /** Put an entry back exactly as it was (undo), keeping its own lastPlayed. */
@@ -53,7 +50,7 @@ export async function getResumePoint(
   filePath: string,
 ): Promise<{ position: number; trackIndex: number }> {
   const saved = await getSavedPosition(filePath);
-  if (saved && (saved.position > 10 || saved.trackIndex > 0)) {
+  if (saved && (saved.resumeExact || saved.position > 10 || saved.trackIndex > 0)) {
     return { position: saved.position, trackIndex: saved.trackIndex };
   }
   return { position: 0, trackIndex: 0 };

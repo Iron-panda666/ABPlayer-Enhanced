@@ -63,6 +63,9 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   theme: "dark",
   colorTheme: "teal",
   miniPlayer: false,
+  miniOpacity: 100,
+  playerExpanded: false,
+  audioVisualization: "off",
   fontScale: "default",
   fontFamily: "editorial",
   defaultTierListId: null,
@@ -163,11 +166,18 @@ export async function loadUserData(): Promise<void> {
 
     const collections = (await s.get<Collection[]>("collections")) || [];
     const loadedPrefs = await s.get<Partial<UserPreferences>>("preferences");
+    const miniOpacity = loadedPrefs?.miniOpacity;
+    const audioVisualization = loadedPrefs?.audioVisualization;
     // Merge with defaults so new fields always have values (nested audio
     // settings get their own back-fill so a partial object never leaks through)
     const preferences: UserPreferences = {
       ...DEFAULT_PREFERENCES,
       ...loadedPrefs,
+      miniOpacity: typeof miniOpacity === "number" && Number.isFinite(miniOpacity)
+        ? Math.min(100, Math.max(50, Math.round(miniOpacity))) : DEFAULT_PREFERENCES.miniOpacity,
+      playerExpanded: loadedPrefs?.playerExpanded === true,
+      audioVisualization: audioVisualization === "spectrum" || audioVisualization === "oscilloscope"
+        || audioVisualization === "levels" ? audioVisualization : "off",
       audio: normalizeAudioSettings(loadedPrefs?.audio),
       eqPresets: normalizeEqPresets(loadedPrefs?.eqPresets),
       reduceMotion: loadedPrefs?.reduceMotion === true,

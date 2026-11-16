@@ -17,6 +17,7 @@ export async function initTray(openMini: (anchor?: TrayIconEvent["position"]) =>
   let quitting = false;
   let closing = false;
   let pending = Promise.resolve();
+  let handlingTrayClick = false;
 
   function report(error: unknown) {
     console.warn("Desktop window controls:", error);
@@ -27,6 +28,22 @@ export async function initTray(openMini: (anchor?: TrayIconEvent["position"]) =>
     await main.show();
     await main.unminimize();
     await main.setFocus();
+  }
+
+  async function switchTrayPlayer(anchor: TrayIconEvent["position"]) {
+    if (handlingTrayClick) return;
+    handlingTrayClick = true;
+    try {
+      const mini = await WebviewWindow.getByLabel("mini-player");
+      if (mini) {
+        await showMain();
+        await mini.close();
+      } else {
+        await openMini(anchor);
+      }
+    } finally {
+      handlingTrayClick = false;
+    }
   }
 
   const stopClose = await main.onCloseRequested(async (event) => {
@@ -76,10 +93,10 @@ export async function initTray(openMini: (anchor?: TrayIconEvent["position"]) =>
         if (!icon) throw new Error("The default application icon is missing");
         const menu = await Menu.new({
           items: [
-            { text: "Open ABPlayer", action: () => void showMain().catch(report) },
+            { text: "Open ABPlayer Fork", action: () => void showMain().catch(report) },
             { text: "Mini player", action: () => void openMini().catch(report) },
             { item: "Separator" },
-            { text: "Quit ABPlayer", action: () => {
+            { text: "Quit ABPlayer Fork", action: () => {
               quitting = true;
               void main.close().catch((error) => {
                 quitting = false;
@@ -92,14 +109,14 @@ export async function initTray(openMini: (anchor?: TrayIconEvent["position"]) =>
           id: "abplayer",
           icon,
           menu,
-          tooltip: "ABPlayer",
+          tooltip: "ABPlayer Fork",
           showMenuOnLeftClick: false,
           action: (event) => {
             const clicks = get(userdataStore).preferences.trayClicks;
             const shouldOpen = clicks === 2
               ? event.type === "DoubleClick" && event.button === "Left"
               : event.type === "Click" && event.button === "Left" && event.buttonState === "Up";
-            if (shouldOpen) void openMini(event.rect.position).catch(report);
+            if (shouldOpen) void switchTrayPlayer(event.rect.position).catch(report);
           },
         });
       } else {

@@ -12,7 +12,7 @@
     playing: false, loading: false, currentTime: 0, duration: 0,
     title: "", author: "", coverArt: null, chapter: "", previous: false, next: false,
     speed: 1, volume: 1, muted: false, sleepMinutes: "off", eq: "Flat", eqPresets: ["Flat"],
-    error: null, isDark: true, primary: "#4db6ac", fontFamily: "editorial",
+    error: null, isDark: true, primary: "#4db6ac", fontFamily: "editorial", opacity: 100,
   });
 
   function send(command: MiniCommand) {
@@ -32,6 +32,7 @@
     document.documentElement.setAttribute("data-theme", state.isDark ? "dark" : "light");
     document.documentElement.setAttribute("data-font-family", state.fontFamily);
     document.documentElement.style.setProperty("--color-primary", state.primary);
+    document.documentElement.style.setProperty("--mini-panel-opacity", `${state.opacity}%`);
   });
 
   const sleepOptions = [15, 30, 60];
@@ -113,7 +114,8 @@
 </div>
 
 <style>
-  :global(html:root) { font-size: 16px; }
+  :global(html:root) { font-size: 16px; background: transparent; }
+  :global(html:root body) { background: transparent; }
   .mp { position: relative; width: 100%; height: 100%; overflow: hidden; }
   .mp-controls {
     display: grid;
@@ -136,12 +138,13 @@
   .mp-control select {
     min-width: 0;
     max-width: 100%;
-    background: var(--color-surface);
+    background: transparent;
     color: var(--color-text);
     border: none;
     font: 500 0.68rem/1 var(--font-label);
     cursor: pointer;
   }
+  .mp-control option { background: var(--color-surface); }
   .mp-eq select { width: 100%; text-overflow: ellipsis; }
   .mp-volume input { width: 100%; min-width: 0; margin: 0; accent-color: var(--color-primary); }
   .mp-volume button, .mp-close {

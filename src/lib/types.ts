@@ -57,6 +57,8 @@ export interface SavedPosition {
   lastPlayed: string;
   /** Index of the track being played (0 for single-file books). */
   trackIndex: number;
+  /** An explicit chapter selection should survive even near the beginning. */
+  resumeExact?: boolean;
 }
 
 export interface ListeningSession {
@@ -190,6 +192,8 @@ export interface EqPreset {
   treble: number;
 }
 
+export type AudioVisualization = "off" | "spectrum" | "oscilloscope" | "levels";
+
 export interface UserPreferences {
   viewMode: "grid" | "list";
   sortBy: SortBy;
@@ -200,6 +204,9 @@ export interface UserPreferences {
   theme: AppTheme;
   colorTheme: string;
   miniPlayer: boolean;
+  miniOpacity: number;
+  playerExpanded: boolean;
+  audioVisualization: AudioVisualization;
   fontScale: FontScale;
   fontFamily: FontFamily;
   defaultTierListId: string | null;

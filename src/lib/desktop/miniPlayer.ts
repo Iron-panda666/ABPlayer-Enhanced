@@ -22,6 +22,7 @@ export interface MiniState {
   isDark: boolean;
   primary: string;
   fontFamily: "editorial" | "modern";
+  opacity: number;
 }
 
 export type MiniCommand =

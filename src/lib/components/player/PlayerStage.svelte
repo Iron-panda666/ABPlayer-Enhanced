@@ -26,6 +26,7 @@
     cancelSleepTimer,
   } from "../../stores/audioStore";
   import { bookmarkStore, addBookmark } from "../../stores/bookmarkStore";
+  import { userdataStore } from "../../stores/userdataStore";
   import { slowLoad } from "../../stores/slowLoad";
   import { showToast } from "../../stores/toastStore";
   import { formatTime, formatTimeShort } from "../../utils/format";
@@ -33,6 +34,7 @@
   import { formatSpeed } from "../../utils/speed";
   import { watchBelow } from "../../utils/measure";
   import WaveformBar from "../WaveformBar.svelte";
+  import AudioVisualizer from "./AudioVisualizer.svelte";
   import { ControlTile, Cover, EqBands, Panel, SectionLabel, SpeedMenu } from "../ui";
   import { PlayButton, IconButton } from "../ui";
 
@@ -42,9 +44,11 @@
     title: string;
     author: string;
     cover: string | null;
+    expanded?: boolean;
   }
 
-  let { book, userData, title, author, cover }: Props = $props();
+  let { book, userData, title, author, cover, expanded = false }: Props = $props();
+  let visualization = $derived($userdataStore.preferences.audioVisualization);
 
   const SLEEP_OPTIONS = [15, 30, 45, 60];
   const SEEK_STEP_S = 5;
@@ -207,6 +211,7 @@
 <div
   class="ps"
   class:short
+  class:expanded
   use:watchBelow={{ rem: SHORT_REM, axis: "height", onchange: (b) => (short = b) }}
 >
   <div class="ps-cover">
@@ -215,6 +220,7 @@
     </div>
   </div>
 
+  <div class="ps-listening">
   <div class="ps-head">
     <h1 class="ps-title" title={title}>{title}</h1>
     <p class="ps-author">{author}</p>
@@ -239,6 +245,11 @@
       </div>
     </div>
   {:else}
+    {#if visualization !== "off"}
+      <AudioVisualizer mode={visualization}
+        active={$audioStore.playing && !$audioStore.muted && $audioStore.volume > 0}
+        reducedMotion={$userdataStore.preferences.reduceMotion} {expanded} />
+    {/if}
     <div class="ps-wave">
       <WaveformBar
         progress={chapterProgress}
@@ -410,6 +421,7 @@
       />
     </div>
   {/if}
+  </div>
 </div>
 
 <style>
@@ -475,6 +487,51 @@
   .ps-cover-box {
     width: min(100cqw, 100cqh, 15.8rem);
     aspect-ratio: 1;
+  }
+
+  .ps-listening { display: contents; }
+
+  .ps.expanded {
+    flex: 1;
+    width: 100%;
+    border: none;
+  }
+
+  .ps.expanded .ps-cover {
+    flex: none;
+    height: 15.8rem;
+  }
+
+  @container player (width > 46rem) {
+    .ps.expanded {
+      display: grid;
+      grid-template-columns: minmax(12rem, 22rem) minmax(18rem, 40rem);
+      align-items: center;
+      justify-content: center;
+      align-content: safe center;
+      gap: clamp(1.75rem, 5cqi, 4.5rem);
+      padding: clamp(1.65rem, 4cqi, 4rem);
+    }
+
+    .ps.expanded .ps-cover {
+      height: auto;
+      container-type: normal;
+    }
+
+    .ps.expanded .ps-cover-box {
+      width: 100%;
+    }
+
+    .ps.expanded .ps-listening {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      min-width: 0;
+    }
+
+    .ps.expanded .ps-title {
+      font-size: clamp(1.5rem, 4cqi, 2.6rem);
+    }
   }
 
   .ps-cover-box.flying {

@@ -1,14 +1,14 @@
 <script lang="ts">
   import { applyAudioSettings } from "../stores/audioStore";
   import { DEFAULT_AUDIO_SETTINGS } from "../stores/userdataStore";
-  import type { AppTheme, FontScale, FontFamily, UserPreferences } from "../types";
+  import type { AppTheme, AudioVisualization, FontScale, FontFamily, UserPreferences } from "../types";
   import { STREAM_DECK_SHORTCUTS } from "../desktop/streamDeck";
   import { setPreference } from "../stores/userdataStore";
   import { THEME_PRESETS } from "../themes";
   import { open as shellOpen } from "@tauri-apps/plugin-shell";
   import { libraryStore, rescan, clearSplits, restoreRemoved } from "../stores/libraryStore";
 
-  const APP_VERSION = "1.7.0";
+  const APP_VERSION = "1.7.1";
   const CREATOR_NAME = "jhidalgo_dev";
   const COFFEE_URL = "https://buymeacoffee.com/jhidalgo_dev";
 
@@ -23,12 +23,17 @@
     fontScale: FontScale;
     fontFamily: FontFamily;
     reduceMotion: boolean;
+    miniOpacity: number;
+    audioVisualization: AudioVisualization;
     autoGroupFiles: boolean;
     desktop: Pick<UserPreferences, "trayIcon" | "closeToTray" | "trayClicks" | "streamDeckShortcuts">;
     onclose: () => void;
   }
 
-  let { open, theme, colorTheme, fontScale, fontFamily, reduceMotion, autoGroupFiles, desktop, onclose }: Props = $props();
+  let {
+    open, theme, colorTheme, fontScale, fontFamily, reduceMotion, miniOpacity, audioVisualization,
+    autoGroupFiles, desktop, onclose,
+  }: Props = $props();
 
   let removedCount = $derived(($libraryStore.hidden ?? []).length);
 
@@ -87,6 +92,13 @@
           </button>
         {/each}
       </div>
+      <label class="desktop-option opacity-option">
+        <span>Mini player opacity</span>
+        <input type="range" min="50" max="100" value={miniOpacity}
+          aria-valuetext={`${miniOpacity}% opacity`}
+          onchange={(e) => setPreference("miniOpacity", e.currentTarget.valueAsNumber)} />
+        <span class="mono" aria-hidden="true">{miniOpacity}%</span>
+      </label>
     </div>
 
     <div class="section">
@@ -180,7 +192,7 @@
           <option value={2}>Double click</option>
         </select>
       </label>
-      <p class="section-hint">Right-click the tray icon to reopen ABPlayer or quit.</p>
+      <p class="section-hint">Use the same click gesture again to return to the main window. Right-click for the tray menu.</p>
     </div>
 
     <div class="section">
@@ -247,6 +259,16 @@
 
     <div class="section">
       <h3 class="section-label">Audio</h3>
+      <label class="desktop-option">
+        <span>Playback visualization</span>
+        <select value={audioVisualization}
+          onchange={(e) => setPreference("audioVisualization", e.currentTarget.value as AudioVisualization)}>
+          <option value="off">Off</option>
+          <option value="spectrum">Spectrum</option>
+          <option value="oscilloscope">Oscilloscope</option>
+          <option value="levels">Level meter</option>
+        </select>
+      </label>
       <p class="section-hint">
         Playback speed, volume, mute and the equalizer are remembered between sessions.
       </p>
@@ -263,7 +285,7 @@
         <div class="about-header">
           <span class="material-symbols-outlined about-icon">headphones</span>
           <div>
-            <p class="about-name">ABPlayer</p>
+            <p class="about-name">ABPlayer Fork</p>
             <p class="about-version">v{APP_VERSION}</p>
           </div>
         </div>
@@ -292,6 +314,9 @@
     font-size: var(--font-size-sm);
   }
   .desktop-option input { accent-color: var(--color-primary); }
+  .opacity-option { margin-top: 0.5rem; }
+  .opacity-option input { flex: 1; min-width: 3rem; }
+  .opacity-option .mono { min-width: 4ch; text-align: right; }
   .desktop-option select {
     border: 1px solid var(--color-outline-variant);
     border-radius: var(--radius-md);

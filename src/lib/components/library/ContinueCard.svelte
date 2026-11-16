@@ -7,7 +7,7 @@
    * — the saved position drives the bar until it is, and pressing play loads
    * it at that position.
    */
-  import type { BookMeta, UserBookData } from "../../types";
+  import type { BookMeta, SavedPosition, UserBookData } from "../../types";
   import {
     audioStore,
     loadBook,
@@ -20,7 +20,11 @@
     setSleepTimer,
     setSleepEndOfChapter,
     cancelSleepTimer,
+    chapterNavigation,
+    findCurrentChapter,
+    stepChapter,
   } from "../../stores/audioStore";
+  import { selectLibraryResumePoint } from "../../stores/libraryStore";
   import { addBookmark } from "../../stores/bookmarkStore";
   import { showToast } from "../../stores/toastStore";
   import { getDisplayTitle, getDisplayAuthor, getDisplayCover } from "../../stores/userdataStore";
@@ -43,7 +47,7 @@
     book: BookMeta;
     userData?: UserBookData | undefined;
     /** Saved progress, used while this book is not the loaded one. */
-    saved?: { position: number; duration: number } | undefined;
+    saved?: SavedPosition | undefined;
     /** Open the full player view. */
     onopen: () => void;
   }
@@ -64,9 +68,11 @@
 
   let panel = $state<"sleep" | "eq" | "speed" | null>(null);
   let scrubbing = $state(false);
+  let savingChapter = $state(false);
   let trackEl = $state<HTMLDivElement | null>(null);
 
   let isCurrent = $derived($audioStore.currentBook?.filePath === book.filePath);
+  let multiFile = $derived(book.tracks.length > 1);
   let title = $derived(getDisplayTitle(book, userData));
   let author = $derived(getDisplayAuthor(book, userData));
   let cover = $derived(getDisplayCover(book, userData));
@@ -78,21 +84,31 @@
   );
   let pct = $derived(total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0);
 
-  let chapters = $derived(isCurrent ? $audioStore.chapters : []);
-  let chapterIndex = $derived(isCurrent ? $audioStore.currentChapterIndex : -1);
+  let chapters = $derived(isCurrent ? $audioStore.chapters : book.chapters);
+  let navigation = $derived(
+    isCurrent ? chapterNavigation($audioStore) : chapterNavigation({
+      totalTracks: book.tracks.length,
+      currentTrackIndex: saved?.trackIndex ?? 0,
+      currentChapterIndex: findCurrentChapter(chapters, elapsed),
+      chapters,
+    }),
+  );
   let chapterLeft = $derived.by(() => {
-    if (!isCurrent || chapterIndex < 0 || chapterIndex >= chapters.length) return null;
-    const next = chapters[chapterIndex + 1];
+    if (multiFile) return total > 0 ? Math.max(0, total - elapsed) : null;
+    if (navigation.index < 0 || navigation.index >= chapters.length) return null;
+    const next = chapters[navigation.index + 1];
     const end = next ? next.startTimeMs / 1000 : total;
-    return Math.max(0, end - $audioStore.currentTime);
+    return Math.max(0, end - elapsed);
   });
 
   let metaLine = $derived.by(() => {
     const parts: string[] = [];
-    if (chapters.length > 0 && chapterIndex >= 0) {
-      parts.push(`Ch ${chapterIndex + 1} of ${chapters.length}`);
+    if (navigation.index >= 0) {
+      parts.push(multiFile
+        ? `Track ${navigation.index + 1} of ${book.tracks.length}`
+        : `Ch ${navigation.index + 1} of ${chapters.length}`);
     }
-    if (chapterLeft !== null) parts.push(`${formatTimeShort(chapterLeft)} left in chapter`);
+    if (chapterLeft !== null) parts.push(`${formatTimeShort(chapterLeft)} left in ${multiFile ? "track" : "chapter"}`);
     else if (total > elapsed) parts.push(`${formatTimeShort(total - elapsed)} left`);
     return parts.join(" · ");
   });
@@ -124,6 +140,26 @@
   function handlePlay() {
     if (isCurrent) togglePlay();
     else loadBook(book);
+  }
+
+  async function handleChapterStep(direction: -1 | 1) {
+    if (isCurrent) {
+      stepChapter(direction);
+      return;
+    }
+    if (savingChapter || (direction < 0 ? !navigation.previous : !navigation.next)) return;
+    const target = navigation.index + direction;
+    const position = multiFile ? 0 : chapters[target].startTimeMs / 1000;
+    const duration = multiFile ? book.tracks[target].duration : total;
+    savingChapter = true;
+    try {
+      await selectLibraryResumePoint(book.filePath, position, duration, multiFile ? target : 0);
+    } catch (error) {
+      console.warn("Could not save chapter selection:", error);
+      showToast("Could not save the chapter selection", "error");
+    } finally {
+      savingChapter = false;
+    }
   }
 
   function seekFromPointer(clientX: number) {
@@ -200,6 +236,13 @@
         <button class="cc-title" onclick={onopen} title={title}>{title}</button>
         <div class="cc-transport">
           <IconButton
+            icon="skip_previous"
+            label="Previous chapter or track"
+            size={compact ? "2rem" : "2.2rem"}
+            disabled={savingChapter || !navigation.previous}
+            onclick={() => void handleChapterStep(-1)}
+          />
+          <IconButton
             icon="replay_30"
             label="Back 30 seconds"
             size={compact ? "2rem" : "2.2rem"}
@@ -211,6 +254,7 @@
             loading={isCurrent && $audioStore.loading}
             size={compact ? "2.9rem" : "3.6rem"}
             onclick={handlePlay}
+            disabled={savingChapter}
           />
           <IconButton
             icon="forward_30"
@@ -218,6 +262,13 @@
             size={compact ? "2rem" : "2.2rem"}
             disabled={!isCurrent}
             onclick={() => skip(30)}
+          />
+          <IconButton
+            icon="skip_next"
+            label="Next chapter or track"
+            size={compact ? "2rem" : "2.2rem"}
+            disabled={savingChapter || !navigation.next}
+            onclick={() => void handleChapterStep(1)}
           />
         </div>
       </div>
@@ -499,7 +550,7 @@
   .cc-transport {
     display: flex;
     align-items: center;
-    gap: 0.7rem;
+    gap: 0.45rem;
     flex-shrink: 0;
   }
 

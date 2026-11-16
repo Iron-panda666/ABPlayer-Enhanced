@@ -47,7 +47,7 @@ interface LibraryState {
   folders: string[];
   scanning: boolean;
   enriching: boolean;
-  positions: Record<string, { position: number; duration: number; lastPlayed: string }>;
+  positions: Record<string, SavedPosition>;
   /** Books the user combined from separate files. */
   groups?: BookGroup[];
   /** Folder paths and auto-group keys the user split back into files. */
@@ -497,16 +497,11 @@ export async function loadLibraryFromStore(): Promise<void> {
         coverArt: normalizeAssetUrl(b.coverArt),
       }));
 
-      const positions: Record<string, { position: number; duration: number; lastPlayed: string }> =
-        {};
+      const positions: Record<string, SavedPosition> = {};
       for (const book of books) {
         const saved = await getSavedPosition(book.filePath);
         if (saved) {
-          positions[book.filePath] = {
-            position: saved.position,
-            duration: saved.duration,
-            lastPlayed: saved.lastPlayed || "",
-          };
+          positions[book.filePath] = saved;
         }
       }
       libraryStore.set({
@@ -651,17 +646,12 @@ export async function scanFolders(folders?: string[]): Promise<void> {
     books.sort((a, b) => a.title.localeCompare(b.title));
 
     // Load saved positions
-    const positions: Record<string, { position: number; duration: number; lastPlayed: string }> =
-      {};
+    const positions: Record<string, SavedPosition> = {};
     for (const book of books) {
       try {
         const saved = await getSavedPosition(book.filePath);
         if (saved) {
-          positions[book.filePath] = {
-            position: saved.position,
-            duration: saved.duration,
-            lastPlayed: saved.lastPlayed || "",
-          };
+          positions[book.filePath] = saved;
         }
       } catch {
         // skip
@@ -911,16 +901,20 @@ export async function restoreProgress(cleared: Record<string, SavedPosition>): P
   for (const [fp, saved] of Object.entries(cleared)) await restorePosition(fp, saved);
   libraryStore.update((s) => ({
     ...s,
-    positions: {
-      ...s.positions,
-      ...Object.fromEntries(
-        Object.entries(cleared).map(([fp, p]) => [
-          fp,
-          { position: p.position, duration: p.duration, lastPlayed: p.lastPlayed || "" },
-        ]),
-      ),
-    },
+    positions: { ...s.positions, ...cleared },
   }));
+}
+
+export async function selectLibraryResumePoint(
+  filePath: string,
+  position: number,
+  duration: number,
+  trackIndex: number,
+): Promise<void> {
+  const lastPlayed = get(libraryStore).positions[filePath]?.lastPlayed || new Date().toISOString();
+  const entry: SavedPosition = { position, duration, trackIndex, lastPlayed, resumeExact: true };
+  await restorePosition(filePath, entry);
+  libraryStore.update((s) => ({ ...s, positions: { ...s.positions, [filePath]: entry } }));
 }
 
 /** Bring back every book the user removed whose files are still there. */

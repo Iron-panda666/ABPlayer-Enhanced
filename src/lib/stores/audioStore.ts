@@ -118,6 +118,15 @@ function ensureAudioGraph(): void {
   gainNode.connect(audioContext.destination);
 }
 
+export function connectAudioAnalyser() {
+  if (!audioContext || !gainNode) return null;
+  const gain = gainNode;
+  const analyser = audioContext.createAnalyser();
+  analyser.fftSize = 2048;
+  gain.connect(analyser);
+  return { analyser, disconnect: () => gain.disconnect(analyser) };
+}
+
 function isMultiFile(book: BookMeta): boolean {
   return book.tracks.length > 1;
 }
@@ -231,7 +240,7 @@ export function getAudioElement(): HTMLAudioElement {
   return audioElement;
 }
 
-function findCurrentChapter(
+export function findCurrentChapter(
   chapters: Chapter[],
   currentTimeSeconds: number,
 ): number {
@@ -591,7 +600,9 @@ export function goToTrack(trackIndex: number, position = 0): void {
   }
 }
 
-export function chapterNavigation(state: AudioState) {
+export function chapterNavigation(
+  state: Pick<AudioState, "totalTracks" | "currentTrackIndex" | "currentChapterIndex" | "chapters">,
+) {
   const multiFile = state.totalTracks > 1;
   const index = multiFile ? state.currentTrackIndex : state.currentChapterIndex;
   const count = multiFile ? state.totalTracks : state.chapters.length;

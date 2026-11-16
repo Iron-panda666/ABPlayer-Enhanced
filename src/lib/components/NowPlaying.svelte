@@ -167,7 +167,7 @@
     padding: 0.85rem 1rem;
     overflow: hidden;
     box-sizing: border-box;
-    background: var(--color-surface);
+    background: color-mix(in srgb, var(--color-surface) var(--mini-panel-opacity, 100%), transparent);
     border: 1px solid var(--color-outline-variant);
     /* The window itself is transparent, so this radius is the widget's outline */
     border-radius: 0.75rem;
