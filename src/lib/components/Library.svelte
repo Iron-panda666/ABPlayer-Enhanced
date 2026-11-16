@@ -56,6 +56,7 @@
   import PickUpAgain from "./library/PickUpAgain.svelte";
   import LibraryFilters from "./library/LibraryFilters.svelte";
   import LibrarySortControls from "./library/LibrarySortControls.svelte";
+  import ProfileBackupDialog from "./library/ProfileBackupDialog.svelte";
   import TierDropStrip from "./library/TierDropStrip.svelte";
   import CombineDialog from "./library/CombineDialog.svelte";
   import BookDetails from "./library/BookDetails.svelte";
@@ -129,6 +130,7 @@
   let addBookOpen = $state(false);
   let showCollectionManager = $state(false);
   let showStats = $state(false);
+  let backupOpen = $state(false);
   let searchQuery = $state("");
   let dropActive = $state(false);
 
@@ -575,6 +577,7 @@
     onrescan={rescan}
     onexport={handleExport}
     onimport={handleImport}
+    onbackup={() => (backupOpen = true)}
     onstats={() => (showStats = true)}
     onmanagecollections={() => (showCollectionManager = true)}
   />
@@ -908,6 +911,10 @@
 
 {#if showStats}
   <StatsPanel onclose={() => (showStats = false)} />
+{/if}
+
+{#if backupOpen}
+  <ProfileBackupDialog onclose={() => (backupOpen = false)} />
 {/if}
 
 {#if confirmRemoveFolder}

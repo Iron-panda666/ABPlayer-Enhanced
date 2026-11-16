@@ -8,6 +8,7 @@ use log::warn;
 use serde::Serialize;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
+mod profile_backup;
 
 /// Maximum allocation size for chapter data from untrusted files (16 MB).
 const MAX_CHAPTER_ALLOC: usize = 16 * 1024 * 1024;
@@ -1685,6 +1686,7 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
+        .setup(profile_backup::setup)
         .register_asynchronous_uri_scheme_protocol("audiostream", |_ctx, request, responder| {
             // Run the handler off the WebView2 thread so range requests don't
             // serialize on the main thread — critical for M4B files where the
@@ -1712,7 +1714,14 @@ pub fn run() {
                 responder.respond(response);
             });
         })
-        .invoke_handler(tauri::generate_handler![read_audio_meta])
+        .invoke_handler(tauri::generate_handler![
+            read_audio_meta,
+            profile_backup::create_profile_backup,
+            profile_backup::inspect_profile_backup,
+            profile_backup::schedule_profile_restore,
+            profile_backup::profile_restore_status,
+            profile_backup::cancel_profile_restore,
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

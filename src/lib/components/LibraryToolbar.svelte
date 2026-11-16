@@ -28,6 +28,7 @@
     onrescan: () => void;
     onexport: () => void;
     onimport: () => void;
+    onbackup: () => void;
     onstats: () => void;
     onmanagecollections: () => void;
   }
@@ -49,6 +50,7 @@
     onrescan,
     onexport,
     onimport,
+    onbackup,
     onstats,
     onmanagecollections,
   }: Props = $props();
@@ -138,7 +140,9 @@
         onclick={onselect}
       />
 
-      <div class="lh-anchor">
+    {/if}
+
+    <div class="lh-anchor">
         <IconButton
           icon="more_horiz"
           label="More library actions"
@@ -166,14 +170,16 @@
             <button class="lh-item" role="menuitem" onclick={() => run(onexport)}>
               <span class="material-symbols-outlined" aria-hidden="true">download</span> Export library
             </button>
+            <button class="lh-item" role="menuitem" onclick={() => run(onbackup)}>
+              <span class="material-symbols-outlined" aria-hidden="true">backup</span> Backup and restore
+            </button>
             <button class="lh-item" role="menuitem" disabled={busy} onclick={() => run(onrescan)}>
               <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
               {busy ? "Scanning…" : "Rescan folders"}
             </button>
           </Panel>
         {/if}
-      </div>
-    {/if}
+    </div>
 
     <Pill icon="book_2" label="Log a book" height="2.1rem" title="Log a book you have no audio file for — it can still be rated and ranked" onclick={onaddbook} />
 

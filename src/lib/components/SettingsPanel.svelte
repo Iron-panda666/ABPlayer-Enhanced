@@ -8,7 +8,7 @@
   import { open as shellOpen } from "@tauri-apps/plugin-shell";
   import { libraryStore, rescan, clearSplits, restoreRemoved } from "../stores/libraryStore";
 
-  const APP_VERSION = "1.7.2";
+  const APP_VERSION = "1.7.3";
   const CREATOR_NAME = "jhidalgo_dev";
   const COFFEE_URL = "https://buymeacoffee.com/jhidalgo_dev";
 

@@ -5,7 +5,7 @@
   import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { LogicalSize, PhysicalPosition } from "@tauri-apps/api/dpi";
   import { emitTo, listen } from "@tauri-apps/api/event";
-  import { isTauri } from "@tauri-apps/api/core";
+  import { invoke, isTauri } from "@tauri-apps/api/core";
   import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
   import Library from "./lib/components/Library.svelte";
   import PlayerView from "./lib/components/PlayerView.svelte";
@@ -15,7 +15,7 @@
   import ShortcutsSheet from "./lib/components/ShortcutsSheet.svelte";
   import { showToast } from "./lib/stores/toastStore";
   import { initMediaSession } from "./lib/stores/mediaSession";
-  import { audioStore, togglePlay, skip, seek, setVolume, toggleMute, applyAudioSettings, chapterNavigation, stepChapter, setSpeed, applyEqPreset, setSleepTimer, setSleepEndOfChapter, cancelSleepTimer } from "./lib/stores/audioStore";
+  import { audioStore, togglePlay, skip, seek, undoSeek, setVolume, toggleMute, applyAudioSettings, chapterNavigation, stepChapter, setSpeed, applyEqPreset, setSleepTimer, setSleepEndOfChapter, cancelSleepTimer } from "./lib/stores/audioStore";
   import { userdataStore, loadUserData, getDisplayTitle, getDisplayAuthor, getDisplayCover } from "./lib/stores/userdataStore";
   import { loadBookmarks } from "./lib/stores/bookmarkStore";
   import { loadStatistics } from "./lib/stores/statisticsStore";
@@ -23,7 +23,7 @@
   import { THEME_PRESETS } from "./lib/themes";
   import { initTray } from "./lib/desktop/tray";
   import { initStreamDeckShortcuts, markCurrentPosition } from "./lib/desktop/streamDeck";
-  import { MINI_HEIGHT, MINI_WIDTH, type MiniCommand, type MiniState } from "./lib/desktop/miniPlayer";
+  import { MINI_HEIGHT, MINI_WIDTH, isUndoSeekShortcut, type MiniCommand, type MiniState } from "./lib/desktop/miniPlayer";
   import { BUILT_IN_EQ_PRESETS, findPreset } from "./lib/utils/eqPresets";
   import type { AppView } from "./lib/types";
 
@@ -44,9 +44,10 @@
     initMediaSession();
 
     window.addEventListener("keydown", (e) => {
+      if (isUndoSeekShortcut(e) && undoSeek()) e.preventDefault();
       // Don't handle shortcuts when typing in an input
       const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.defaultPrevented || tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
 
       switch (e.key) {
         case "Escape":
@@ -90,6 +91,9 @@
     });
 
     if (!isTauri()) return;
+    void invoke<{ startupNotice: string | null }>("profile_restore_status").then((status) => {
+      if (status?.startupNotice) showToast(status.startupNotice, "restore");
+    }).catch(console.warn);
     const stopTray = initTray(openMiniPlayer).catch((error) => {
       console.warn("Could not initialize the tray:", error);
     });
@@ -118,6 +122,7 @@
         case "skip-back": skip(-30); break;
         case "previous": stepChapter(-1); break;
         case "next": stepChapter(1); break;
+        case "undo-seek": undoSeek(); break;
         case "seek": if (Number.isFinite(payload.value)) seek(payload.value); break;
         case "volume": if (Number.isFinite(payload.value)) setVolume(payload.value); break;
         case "speed": if (payload.value >= 0.25 && payload.value <= 4) setSpeed(payload.value); break;
@@ -167,6 +172,7 @@
       chapter: audio.totalTracks > 1 ? `Track ${audio.currentTrackIndex + 1} of ${audio.totalTracks}`
         : audio.currentChapterIndex >= 0 ? `Ch ${audio.currentChapterIndex + 1} of ${audio.chapters.length}` : "",
       previous: navigation.previous, next: navigation.next,
+      canUndoSeek: !!audio.seekUndo,
       speed: audio.speed, volume: audio.volume, muted: audio.muted, sleepMinutes,
       eq: eq?.name ?? "Custom", eqPresets: [...BUILT_IN_EQ_PRESETS, ...prefs.eqPresets].map((option) => option.name),
       error: book ? audio.error : null, isDark, primary: (isDark ? preset.dark : preset.light).primary,

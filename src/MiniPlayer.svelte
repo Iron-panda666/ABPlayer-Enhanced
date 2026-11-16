@@ -5,12 +5,12 @@
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import NowPlaying from "./lib/components/NowPlaying.svelte";
   import { IconButton } from "./lib/components/ui";
-  import { type MiniCommand, type MiniState } from "./lib/desktop/miniPlayer";
+  import { isUndoSeekShortcut, type MiniCommand, type MiniState } from "./lib/desktop/miniPlayer";
   import { speedOptions } from "./lib/utils/speed";
 
   let state = $state<MiniState>({
     playing: false, loading: false, currentTime: 0, duration: 0,
-    title: "", author: "", coverArt: null, chapter: "", previous: false, next: false,
+    title: "", author: "", coverArt: null, chapter: "", previous: false, next: false, canUndoSeek: false,
     speed: 1, volume: 1, muted: false, sleepMinutes: "off", eq: "Flat", eqPresets: ["Flat"],
     error: null, isDark: true, primary: "#4db6ac", fontFamily: "editorial", opacity: 100,
   });
@@ -44,6 +44,13 @@
   });
 </script>
 
+<svelte:window onkeydown={(e) => {
+  if (state.canUndoSeek && isUndoSeekShortcut(e)) {
+    e.preventDefault();
+    send({ action: "undo-seek" });
+  }
+}} />
+
 <div class="mp">
   <NowPlaying
     state={np}
@@ -51,6 +58,7 @@
     onskip={(seconds) => send({ action: seconds < 0 ? "skip-back" : "skip-forward" })}
     onstep={(direction) => send({ action: direction < 0 ? "previous" : "next" })}
     onseek={(value) => send({ action: "seek", value })}
+    onundo={() => send({ action: "undo-seek" })}
   >
     {#snippet extraControls()}
       <div class="mp-controls">

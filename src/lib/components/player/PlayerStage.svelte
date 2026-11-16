@@ -16,6 +16,7 @@
     chapterNavigation,
     stepChapter,
     seek,
+    undoSeek,
     setVolume,
     toggleMute,
     setAbRepeatA,
@@ -262,6 +263,8 @@
       />
       <div class="ps-wave-times">
         <span class="mono">{formatTime(chapterElapsed)}</span>
+        <IconButton icon="undo" label="Undo seek (Ctrl+Z)" size="1.2rem"
+          iconSize="0.95rem" bare disabled={!$audioStore.seekUndo} onclick={undoSeek} />
         <span class="mono">−{formatTimeShort(chapterLeft)}</span>
       </div>
     </div>

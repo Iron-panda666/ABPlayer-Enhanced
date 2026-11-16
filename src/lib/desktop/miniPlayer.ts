@@ -12,6 +12,7 @@ export interface MiniState {
   chapter: string;
   previous: boolean;
   next: boolean;
+  canUndoSeek: boolean;
   speed: number;
   volume: number;
   muted: boolean;
@@ -26,7 +27,13 @@ export interface MiniState {
 }
 
 export type MiniCommand =
-  | { action: "ready" | "toggle-play" | "skip-forward" | "skip-back" | "previous" | "next" | "mute" | "bookmark" }
+  | { action: "ready" | "toggle-play" | "skip-forward" | "skip-back" | "previous" | "next" | "undo-seek" | "mute" | "bookmark" }
   | { action: "seek" | "volume" | "speed"; value: number }
   | { action: "sleep"; value: MiniState["sleepMinutes"] }
   | { action: "eq"; value: string };
+
+export function isUndoSeekShortcut(e: KeyboardEvent): boolean {
+  return !e.defaultPrevented && !e.repeat && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey &&
+    e.key.toLowerCase() === "z" &&
+    !(e.target instanceof Element && e.target.closest("input, textarea, select, [contenteditable]"));
+}

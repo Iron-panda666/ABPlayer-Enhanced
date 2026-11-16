@@ -21,6 +21,7 @@
     canPlay?: boolean;
     previous?: boolean;
     next?: boolean;
+    canUndoSeek?: boolean;
   }
 
   interface Props {
@@ -30,11 +31,12 @@
     /** With this set, the elapsed time can be clicked and typed over to jump there. */
     onseek?: (seconds: number) => void;
     onstep?: (direction: -1 | 1) => void;
+    onundo?: () => void;
     extraControls?: Snippet;
   }
 
   // Held as `np`: a local called `state` would shadow the $state rune used below
-  let { state: np, onplay, onskip, onseek, onstep, extraControls }: Props = $props();
+  let { state: np, onplay, onskip, onseek, onstep, onundo, extraControls }: Props = $props();
 
   // Typing a time: the draft is local, so the once-a-second state updates do not overwrite it
   let editing = $state(false);
@@ -126,6 +128,10 @@
           {/if}
           <span class="np-sep" data-tauri-drag-region>/</span>
           <span data-tauri-drag-region>{formatTimeShort(np.duration)}</span>
+          {#if onundo}
+            <IconButton icon="undo" label="Undo seek (Ctrl+Z)" size="1.1rem"
+              iconSize="0.88rem" bare disabled={!np.canUndoSeek} onclick={onundo} />
+          {/if}
         </span>
       {/if}
     </div>

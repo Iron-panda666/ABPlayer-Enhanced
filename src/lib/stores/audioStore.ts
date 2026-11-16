@@ -23,6 +23,12 @@ import {
 } from "./userdataStore";
 import { onPlaybackStarted, onPlaybackPaused, incrementBooksFinished } from "./statisticsStore";
 
+interface SeekPoint {
+  filePath: string;
+  trackIndex: number;
+  position: number;
+}
+
 interface AudioState {
   playing: boolean;
   /** True while play has been requested but the audio element hasn't yet
@@ -49,6 +55,7 @@ interface AudioState {
   sleepTimerRemaining: number | null;
   sleepTimerMode: "off" | "minutes" | "end-of-chapter";
   abRepeat: { a: number; b: number } | null;
+  seekUndo: SeekPoint | null;
 }
 
 const initialState: AudioState = {
@@ -72,6 +79,7 @@ const initialState: AudioState = {
   sleepTimerRemaining: null,
   sleepTimerMode: "off",
   abRepeat: null,
+  seekUndo: null,
 };
 
 export const audioStore = writable<AudioState>(initialState);
@@ -277,7 +285,7 @@ function safePlay(audio: HTMLAudioElement): void {
 }
 
 /** Load a specific track of a book into the audio element and play. */
-function playTrack(book: BookMeta, trackIndex: number, position = 0): void {
+function playTrack(book: BookMeta, trackIndex: number, position = 0, resume = true): void {
   const audio = getAudioElement();
   const filePath = getTrackFilePath(book, trackIndex);
   const src = audioSrc(filePath);
@@ -295,7 +303,8 @@ function playTrack(book: BookMeta, trackIndex: number, position = 0): void {
     abRepeat: null,
   }));
 
-  safePlay(audio);
+  if (resume) safePlay(audio);
+  else audio.pause();
 }
 
 /**
@@ -327,6 +336,7 @@ async function loadBookInner(book: BookMeta): Promise<void> {
       playing: false,
       error: null,
       abRepeat: null,
+      seekUndo: null,
     }));
     markInProgressIfNew(book.filePath);
     return;
@@ -366,6 +376,7 @@ async function loadBookInner(book: BookMeta): Promise<void> {
     duration: book.duration || 0,
     error: null,
     abRepeat: null,
+    seekUndo: null,
     currentChapterIndex: chapters.length > 0 ? 0 : -1,
     currentTrackIndex: 0,
     totalTracks,
@@ -415,16 +426,9 @@ function startAutoSaveForCurrent(): void {
 /** "Start over": back to the first track and second zero, keeping playback state. */
 export function restartBook(): void {
   const state = get(audioStore);
-  const book = state.currentBook;
-  if (!book) return;
-  const audio = getAudioElement();
-  if (isMultiFile(book) && state.currentTrackIndex !== 0) {
-    goToTrack(0);
-    audio.addEventListener("loadedmetadata", () => { audio.currentTime = 0; }, { once: true });
-    return;
-  }
-  audio.currentTime = 0;
-  audioStore.update((s) => ({ ...s, currentTime: 0 }));
+  if (state.totalTracks > 1 && state.currentTrackIndex !== 0) {
+    jumpToTrack(state, 0, 0, state.playing);
+  } else seek(0);
 }
 
 export function togglePlay(): void {
@@ -437,21 +441,73 @@ export function togglePlay(): void {
   }
 }
 
-export function seek(time: number): void {
-  const audio = getAudioElement();
+function seekPoint(state: AudioState): SeekPoint | null {
+  if (!state.currentBook || state.currentBook.fileless || !audioElement) return null;
+  return {
+    filePath: state.currentBook.filePath,
+    trackIndex: state.currentTrackIndex,
+    position: audioElement.currentTime,
+  };
+}
+
+function clampedSeekTime(time: number, state: AudioState, audio: HTMLAudioElement): number {
   // Fall back to the store's duration when audio.duration is NaN — moov-at-end
   // M4Bs report NaN until the atom is parsed, so chapter jumps would otherwise
   // clamp to 0 before metadata loads.
-  const fallback = get(audioStore).duration;
   const upper = Number.isFinite(audio.duration) && audio.duration > 0
     ? audio.duration
-    : fallback;
-  audio.currentTime = Math.max(0, Math.min(time, upper || 0));
+    : state.duration;
+  return Math.max(0, Math.min(time, upper || 0));
+}
+
+function setAudioPosition(audio: HTMLAudioElement, position: number, undo: SeekPoint | null): void {
+  audio.currentTime = position;
+  audioStore.update((s) => ({
+    ...s,
+    currentTime: position,
+    currentChapterIndex: s.totalTracks > 1 ? s.currentTrackIndex : findCurrentChapter(s.chapters, position),
+    seekUndo: undo,
+    abRepeat: s.abRepeat && position >= s.abRepeat.a && position < s.abRepeat.b ? s.abRepeat : null,
+  }));
+}
+
+/** One drag counts as one seek, even when it updates the audio continuously. */
+export function beginSeekGesture(): (time: number) => void {
+  const start = get(audioStore);
+  const origin = seekPoint(start);
+  return (time) => {
+    const state = get(audioStore);
+    if (!origin || !audioElement || !Number.isFinite(time) ||
+        state.currentBook?.filePath !== origin.filePath || state.currentTrackIndex !== origin.trackIndex) return;
+    const position = clampedSeekTime(time, state, audioElement);
+    if (Math.abs(position - audioElement.currentTime) < 0.001) return;
+    const undo = Math.abs(position - origin.position) < 0.001 ? start.seekUndo : origin;
+    setAudioPosition(audioElement, position, undo);
+  };
+}
+
+export function seek(time: number): void {
+  beginSeekGesture()(time);
 }
 
 export function skip(seconds: number): void {
-  const audio = getAudioElement();
-  seek(audio.currentTime + seconds);
+  if (audioElement) seek(audioElement.currentTime + seconds);
+}
+
+export function undoSeek(): boolean {
+  const state = get(audioStore);
+  const undo = state.seekUndo;
+  const book = state.currentBook;
+  if (!undo || !audioElement || !book || book.fileless || book.filePath !== undo.filePath) return false;
+
+  if (undo.trackIndex !== state.currentTrackIndex) {
+    if (!isMultiFile(book) || !book.tracks[undo.trackIndex]) return false;
+    playTrack(book, undo.trackIndex, undo.position, state.playing);
+    audioStore.update((s) => ({ ...s, seekUndo: null }));
+  } else {
+    setAudioPosition(audioElement, clampedSeekTime(undo.position, state, audioElement), null);
+  }
+  return true;
 }
 
 export function setSpeed(speed: number): void {
@@ -581,7 +637,7 @@ export function seekToChapter(index: number): void {
     if (book && isMultiFile(book)) {
       // For multi-file books, chapters map to tracks
       if (index < book.tracks.length) {
-        playTrack(book, index);
+        goToTrack(index);
         return;
       }
     }
@@ -592,11 +648,18 @@ export function seekToChapter(index: number): void {
 
 /** Jump to a specific track in a multi-file book. */
 export function goToTrack(trackIndex: number, position = 0): void {
-  const state = get(audioStore);
-  if (state.currentBook && isMultiFile(state.currentBook)) {
-    if (trackIndex >= 0 && trackIndex < state.currentBook.tracks.length) {
-      playTrack(state.currentBook, trackIndex, position);
-    }
+  jumpToTrack(get(audioStore), trackIndex, position, true);
+}
+
+function jumpToTrack(state: AudioState, trackIndex: number, position: number, resume: boolean): void {
+  const book = state.currentBook;
+  if (!book || !isMultiFile(book) || !Number.isInteger(trackIndex) || !book.tracks[trackIndex] ||
+      !Number.isFinite(position)) return;
+  const origin = seekPoint(state);
+  const target = Math.max(0, position);
+  playTrack(book, trackIndex, target, resume);
+  if (origin && (trackIndex !== origin.trackIndex || Math.abs(target - origin.position) >= 0.001)) {
+    audioStore.update((s) => ({ ...s, seekUndo: origin }));
   }
 }
 

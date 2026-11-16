@@ -14,7 +14,8 @@
     togglePlay,
     restartBook,
     skip,
-    seek,
+    beginSeekGesture,
+    undoSeek,
     setVolume,
     toggleMute,
     setSleepTimer,
@@ -68,6 +69,7 @@
 
   let panel = $state<"sleep" | "eq" | "speed" | null>(null);
   let scrubbing = $state(false);
+  let scrubSeek: ((time: number) => void) | null = null;
   let savingChapter = $state(false);
   let trackEl = $state<HTMLDivElement | null>(null);
 
@@ -166,11 +168,12 @@
     if (!trackEl || total <= 0) return;
     const r = trackEl.getBoundingClientRect();
     const ratio = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
-    if (isCurrent) seek(ratio * total);
+    if (isCurrent) scrubSeek?.(ratio * total);
   }
 
   function onTrackPointerDown(e: PointerEvent) {
     if (!isCurrent) return;
+    scrubSeek = beginSeekGesture();
     scrubbing = true;
     trackEl?.setPointerCapture(e.pointerId);
     seekFromPointer(e.clientX);
@@ -183,7 +186,8 @@
   function onTrackPointerUp(e: PointerEvent) {
     if (!scrubbing) return;
     scrubbing = false;
-    trackEl?.releasePointerCapture(e.pointerId);
+    scrubSeek = null;
+    if (trackEl?.hasPointerCapture(e.pointerId)) trackEl.releasePointerCapture(e.pointerId);
   }
 
   function onTrackKey(e: KeyboardEvent) {
@@ -309,6 +313,8 @@
 
       <div class="cc-times">
         <span class="mono">{formatTime(elapsed)}</span>
+        <IconButton icon="undo" label="Undo seek (Ctrl+Z)" size="1.2rem"
+          iconSize="0.95rem" bare disabled={!isCurrent || !$audioStore.seekUndo} onclick={undoSeek} />
         <span class="mono">{formatTime(total)}</span>
       </div>
 

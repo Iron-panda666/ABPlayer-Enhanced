@@ -18,6 +18,7 @@
         { keys: ["Space"], label: "Play or pause" },
         { keys: ["←"], label: "Back 30 seconds" },
         { keys: ["→"], label: "Forward 30 seconds" },
+        { keys: ["Ctrl", "Z"], label: "Undo the last seek" },
         { keys: ["↑"], label: "Volume up" },
         { keys: ["↓"], label: "Volume down" },
         { keys: ["M"], label: "Mute or unmute" },
