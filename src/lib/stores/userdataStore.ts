@@ -16,6 +16,7 @@ import type {
   BookMeta,
   BookStatus,
   SortBy,
+  SortDirection,
   ExportData,
   SavedPosition,
   TierList,
@@ -23,6 +24,16 @@ import type {
   BookGroup,
 } from "../types";
 import { createId } from "../utils/id";
+import { naturalCompare } from "../utils/sort";
+import {
+  DEFAULT_LIBRARY_COLUMNS,
+  defaultSortDirection,
+  isLibraryColumn,
+  lastPlayedTime,
+  libraryProgress,
+  normalizeLibraryColumns,
+  type LibraryPosition,
+} from "../utils/libraryColumns";
 import { getStore } from "./storeUtils";
 
 const STORE_FILE = "userdata.json";
@@ -57,6 +68,8 @@ export function normalizeAudioSettings(raw: unknown): AudioSettings {
 const DEFAULT_PREFERENCES: UserPreferences = {
   viewMode: "grid",
   sortBy: "title",
+  sortDirection: "asc",
+  libraryColumns: DEFAULT_LIBRARY_COLUMNS,
   filterStatus: "all",
   filterCollection: null,
   filterTier: null,
@@ -166,6 +179,8 @@ export async function loadUserData(): Promise<void> {
 
     const collections = (await s.get<Collection[]>("collections")) || [];
     const loadedPrefs = await s.get<Partial<UserPreferences>>("preferences");
+    const sortBy = isLibraryColumn(loadedPrefs?.sortBy) ? loadedPrefs.sortBy : "title";
+    const direction = loadedPrefs?.sortDirection;
     const miniOpacity = loadedPrefs?.miniOpacity;
     const audioVisualization = loadedPrefs?.audioVisualization;
     // Merge with defaults so new fields always have values (nested audio
@@ -173,6 +188,9 @@ export async function loadUserData(): Promise<void> {
     const preferences: UserPreferences = {
       ...DEFAULT_PREFERENCES,
       ...loadedPrefs,
+      sortBy,
+      sortDirection: direction === "asc" || direction === "desc" ? direction : defaultSortDirection(sortBy),
+      libraryColumns: normalizeLibraryColumns(loadedPrefs?.libraryColumns),
       miniOpacity: typeof miniOpacity === "number" && Number.isFinite(miniOpacity)
         ? Math.min(100, Math.max(50, Math.round(miniOpacity))) : DEFAULT_PREFERENCES.miniOpacity,
       playerExpanded: loadedPrefs?.playerExpanded === true,
@@ -415,12 +433,19 @@ export async function setPreference<K extends keyof UserPreferences>(
   await persist();
 }
 
+export async function setLibrarySort(sortBy: SortBy, sortDirection: SortDirection): Promise<void> {
+  userdataStore.update((s) => ({ ...s, preferences: { ...s.preferences, sortBy, sortDirection } }));
+  await persist();
+}
+
 // ---- Sort & Filter ----
+
+const STATUS_ORDER: Record<BookStatus, number> = { in_progress: 0, not_started: 1, finished: 2 };
 
 export function sortAndFilterBooks(
   books: BookMeta[],
   userData: Record<string, UserBookData>,
-  positions: Record<string, { position: number; duration: number }>,
+  positions: Record<string, LibraryPosition>,
   prefs: UserPreferences,
 ): BookMeta[] {
   let result = [...books];
@@ -442,62 +467,41 @@ export function sortAndFilterBooks(
     });
   }
 
-  // Sort
-  result.sort((a, b) => {
-    const udA = userData[a.filePath];
-    const udB = userData[b.filePath];
-
+  function sortValue(book: BookMeta, ud: UserBookData | undefined): string | number | null {
     switch (prefs.sortBy) {
-      case "title": {
-        const tA = udA?.titleOverride || a.title;
-        const tB = udB?.titleOverride || b.title;
-        return tA.localeCompare(tB);
-      }
-      case "author": {
-        const aA = udA?.authorOverride || a.author;
-        const aB = udB?.authorOverride || b.author;
-        return aA.localeCompare(aB);
-      }
-      case "recent": {
-        const pA = positions[a.filePath];
-        const pB = positions[b.filePath];
-        // Books with positions first, then by no position
-        if (pA && !pB) return -1;
-        if (!pA && pB) return 1;
-        return 0;
-      }
-      case "status": {
-        const order: Record<string, number> = {
-          in_progress: 0,
-          not_started: 1,
-          finished: 2,
-        };
-        const sA = order[udA?.status || "not_started"] ?? 1;
-        const sB = order[udB?.status || "not_started"] ?? 1;
-        return sA - sB;
-      }
-      case "series": {
-        const serA = udA?.series || "";
-        const serB = udB?.series || "";
-        // Books with series first, then by series name, then by order
-        if (serA && !serB) return -1;
-        if (!serA && serB) return 1;
-        if (serA && serB) {
-          const cmp = serA.localeCompare(serB);
-          if (cmp !== 0) return cmp;
-          return (udA?.seriesOrder ?? 999) - (udB?.seriesOrder ?? 999);
-        }
-        // Both without series — sort by title
-        const tA = udA?.titleOverride || a.title;
-        const tB = udB?.titleOverride || b.title;
-        return tA.localeCompare(tB);
-      }
-      default:
-        return 0;
+      case "title": return getDisplayTitle(book, ud);
+      case "author": return getDisplayAuthor(book, ud);
+      case "duration": return book.duration > 0 ? book.duration : null;
+      case "status": return STATUS_ORDER[ud?.status ?? "not_started"];
+      case "progress": return libraryProgress(book, ud?.status ?? "not_started", positions[book.filePath]);
+      case "series": return ud?.series?.trim() || null;
+      case "narrator": return ud?.narrator?.trim() || null;
+      case "genre": return ud?.genre?.trim() || null;
+      case "publishYear": return ud?.publishYear ?? null;
+      case "recent": return lastPlayedTime(positions[book.filePath]);
     }
-  });
+  }
 
-  return result;
+  const direction = prefs.sortDirection === "desc" ? -1 : 1;
+  const entries = result.map((book) => {
+    const ud = userData[book.filePath];
+    return { book, value: sortValue(book, ud), title: getDisplayTitle(book, ud), seriesOrder: ud?.seriesOrder ?? null };
+  });
+  entries.sort((a, b) => {
+    if (a.value === null || b.value === null) {
+      if (a.value !== b.value) return a.value === null ? 1 : -1;
+      return naturalCompare(a.title, b.title);
+    }
+    const compare = typeof a.value === "number" && typeof b.value === "number"
+      ? a.value - b.value : naturalCompare(String(a.value), String(b.value));
+    if (compare !== 0) return compare * direction;
+    if (prefs.sortBy === "series" && a.seriesOrder !== b.seriesOrder) {
+      if (a.seriesOrder == null || b.seriesOrder == null) return a.seriesOrder == null ? 1 : -1;
+      return (a.seriesOrder - b.seriesOrder) * direction;
+    }
+    return naturalCompare(a.title, b.title);
+  });
+  return entries.map(({ book }) => book);
 }
 
 // ---- Export ----
@@ -688,16 +692,20 @@ export async function importLibrary(
   }
 
   // Optionally merge preferences (only if user has defaults)
-  const validSortValues: string[] = ["title", "author", "recent", "status", "series"];
   if (
     importData.preferences &&
     typeof importData.preferences === "object" &&
-    typeof importData.preferences.sortBy === "string" &&
-    validSortValues.includes(importData.preferences.sortBy)
+    isLibraryColumn(importData.preferences.sortBy)
   ) {
     const current = get(userdataStore).preferences;
-    if (current.sortBy === "title" && current.filterStatus === "all") {
-      await setPreference("sortBy", importData.preferences.sortBy as SortBy);
+    if (current.sortBy === "title" && current.sortDirection === "asc" && current.filterStatus === "all") {
+      const { sortBy, sortDirection } = importData.preferences;
+      await setLibrarySort(sortBy, sortDirection === "asc" || sortDirection === "desc"
+        ? sortDirection : defaultSortDirection(sortBy));
+    }
+    if (Array.isArray(importData.preferences.libraryColumns)
+      && current.libraryColumns.join() === DEFAULT_LIBRARY_COLUMNS.join()) {
+      await setPreference("libraryColumns", normalizeLibraryColumns(importData.preferences.libraryColumns));
     }
   }
 

@@ -162,7 +162,10 @@ export interface TierList {
   defaultAxes: string[];
 }
 
-export type SortBy = "title" | "author" | "recent" | "status" | "series";
+export type SortBy =
+  | "title" | "author" | "duration" | "status" | "progress" | "series"
+  | "narrator" | "publishYear" | "genre" | "recent";
+export type SortDirection = "asc" | "desc";
 export type FilterStatus = "all" | BookStatus;
 
 export type AppTheme = "light" | "dark";
@@ -197,6 +200,8 @@ export type AudioVisualization = "off" | "spectrum" | "oscilloscope" | "levels";
 export interface UserPreferences {
   viewMode: "grid" | "list";
   sortBy: SortBy;
+  sortDirection: SortDirection;
+  libraryColumns: SortBy[];
   filterStatus: FilterStatus;
   filterCollection: string | null;
   /** Currently selected tier filter (tier.id within the default list), or null. */

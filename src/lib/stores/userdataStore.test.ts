@@ -102,6 +102,39 @@ describe("sortAndFilterBooks", () => {
     const out = sortAndFilterBooks([a, b, c], userData, {}, { ...prefs, sortBy: "series" });
     expect(out.map((x) => x.filePath)).toEqual(["c", "b", "a"]);
   });
+
+  it("sorts numbers numerically in either direction and puts missing values last", () => {
+    const books = [a, { ...b, duration: 200 }, { ...c, duration: 40 }];
+    const sorted = (sortDirection: "asc" | "desc") =>
+      sortAndFilterBooks(books, userData, {}, { ...prefs, sortBy: "duration", sortDirection })
+        .map((item) => item.filePath);
+
+    expect(sorted("asc")).toEqual(["c", "b", "a"]);
+    expect(sorted("desc")).toEqual(["b", "c", "a"]);
+  });
+
+  it("sorts old Recent preferences by actual listening date", async () => {
+    await makeStore("userdata.json").set("preferences", { sortBy: "recent" });
+    await loadUserData();
+    const restored = get(userdataStore).preferences;
+    expect(restored.sortDirection).toBe("desc");
+    expect(restored.libraryColumns).toEqual(["title", "author", "duration"]);
+
+    const positions = {
+      a: { position: 10, duration: 100, lastPlayed: "2025-01-01T12:00:00Z" },
+      b: { position: 10, duration: 100, lastPlayed: "2025-01-02T12:00:00Z" },
+    };
+    expect(sortAndFilterBooks([a, c, b], userData, positions, restored).map((item) => item.filePath))
+      .toEqual(["b", "a", "c"]);
+  });
+
+  it("restores the saved column order and ignores duplicate or retired columns", async () => {
+    await makeStore("userdata.json").set("preferences", {
+      libraryColumns: ["series", "title", "removed", "progress", "series"],
+    });
+    await loadUserData();
+    expect(get(userdataStore).preferences.libraryColumns).toEqual(["title", "series", "progress"]);
+  });
 });
 
 describe("export → import round trip", () => {

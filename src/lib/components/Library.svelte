@@ -21,6 +21,7 @@
   import {
     userdataStore,
     setPreference,
+    setLibrarySort,
     sortAndFilterBooks,
     exportLibrary,
     importLibrary,
@@ -41,7 +42,7 @@
   import { audioStore, loadBook } from "../stores/audioStore";
   import { getSavedPosition, savePosition } from "../stores/positionStore";
   import { showToast } from "../stores/toastStore";
-  import type { BookMeta, BookStatus } from "../types";
+  import type { BookMeta, BookStatus, SortBy } from "../types";
   import { getCurrentWindow } from "@tauri-apps/api/window";
   import BookCard from "./BookCard.svelte";
   import BookListItem from "./BookListItem.svelte";
@@ -54,12 +55,14 @@
   import ContinueCard from "./library/ContinueCard.svelte";
   import PickUpAgain from "./library/PickUpAgain.svelte";
   import LibraryFilters from "./library/LibraryFilters.svelte";
+  import LibrarySortControls from "./library/LibrarySortControls.svelte";
   import TierDropStrip from "./library/TierDropStrip.svelte";
   import CombineDialog from "./library/CombineDialog.svelte";
   import BookDetails from "./library/BookDetails.svelte";
   import { SectionLabel, SkeletonTile } from "./ui";
   import { watchBelow } from "../utils/measure";
   import { groupBySeries, seriesMeta } from "../utils/series";
+  import { defaultSortDirection, LIBRARY_COLUMNS, LIBRARY_ROW_ACTION_WIDTH } from "../utils/libraryColumns";
 
   interface Props {
     onnavtoplayer: () => void;
@@ -68,6 +71,7 @@
   let { onnavtoplayer }: Props = $props();
 
   let toolbarRef: LibraryToolbar;
+  let sortControls: LibrarySortControls | undefined = $state();
 
   /**
    * The handoff's continue row wraps: card `flex: 1 1 460px`, panel
@@ -132,8 +136,8 @@
   let focusedIndex = $state(-1);
 
   function handleGridKeydown(e: KeyboardEvent) {
-    const tag = (e.target as HTMLElement)?.tagName;
-    if (tag === "INPUT" || tag === "TEXTAREA") return;
+    if (e.defaultPrevented || (e.target instanceof HTMLElement
+      && e.target.closest("button, input, textarea, select"))) return;
     const cols = Math.floor((document.querySelector(".grid")?.clientWidth ?? 600) / 160) || 4;
     const len = visibleBooks.length;
     if (!len) return;
@@ -212,15 +216,31 @@
     $defaultTierList ? [...$defaultTierList.tiers].sort((a, b) => a.order - b.order) : [],
   );
 
-  /** Sorting by Series switches the grid for one shelf per series. */
-  let shelfView = $derived($userdataStore.preferences.sortBy === "series" && !searchQuery);
-  let shelves = $derived(
-    shelfView
-      ? groupBySeries(displayBooks, $userdataStore.books, (b) =>
-          getDisplayTitle(b, $userdataStore.books[b.filePath]),
-        )
-      : [],
+  let prefs = $derived($userdataStore.preferences);
+  let listMode = $derived(prefs.viewMode === "list");
+  let columns = $derived(prefs.libraryColumns);
+  let tableWidth = $derived(
+    columns.reduce((width, column) => width + LIBRARY_COLUMNS[column].width, LIBRARY_ROW_ACTION_WIDTH),
   );
+  /** The grid groups series into shelves and keeps each shelf in reading order. */
+  let shelfView = $derived(!listMode && prefs.sortBy === "series" && !searchQuery);
+  let shelves = $derived.by(() => {
+    if (!shelfView) return [];
+    const groups = groupBySeries(displayBooks, $userdataStore.books, (b) =>
+      getDisplayTitle(b, $userdataStore.books[b.filePath]),
+    );
+    if (prefs.sortDirection === "asc") return groups;
+    const loose = groups.at(-1);
+    if (loose?.series !== null) return groups.reverse();
+    return [...groups.slice(0, -1).reverse(), loose];
+  });
+
+  function sortFromHeader(column: SortBy) {
+    const direction = column === prefs.sortBy
+      ? (prefs.sortDirection === "asc" ? "desc" : "asc")
+      : defaultSortDirection(column);
+    void setLibrarySort(column, direction);
+  }
 
   let visibleBooks = $derived(displayBooks.slice(0, renderLimit));
   let hasMore = $derived(displayBooks.length > renderLimit);
@@ -236,6 +256,7 @@
     void $userdataStore.preferences.filterCollection;
     void $userdataStore.preferences.filterTier;
     void $userdataStore.preferences.sortBy;
+    void $userdataStore.preferences.sortDirection;
     void searchQuery;
     renderLimit = RENDER_BATCH;
   });
@@ -539,7 +560,6 @@
   <LibraryToolbar
     bind:this={toolbarRef}
     viewMode={$userdataStore.preferences.viewMode}
-    sortBy={$userdataStore.preferences.sortBy}
     bookCount={$libraryStore.books.length}
     folders={$libraryStore.folders}
     scanning={$libraryStore.scanning}
@@ -547,7 +567,6 @@
     hasBooks={$libraryStore.books.length > 0}
     selecting={selectionMode}
     onviewchange={(m) => setPreference("viewMode", m)}
-    onsortchange={(s) => setPreference("sortBy", s)}
     onselect={() => { if (selectionMode) clearSelection(); else selectionMode = true; }}
     onsearch={(q) => (searchQuery = q)}
     onaddfolder={addFolder}
@@ -617,17 +636,28 @@
           label="All books"
           meta={`${displayBooks.length} of ${$libraryStore.books.length}`}
         />
-        <LibraryFilters
-          filterStatus={$userdataStore.preferences.filterStatus}
-          filterCollection={$userdataStore.preferences.filterCollection}
-          filterTier={$userdataStore.preferences.filterTier}
-          {tierFilterOptions}
-          collections={$userdataStore.collections}
-          onstatusfilter={(s) => setPreference("filterStatus", s)}
-          oncollectionfilter={(id) => setPreference("filterCollection", id)}
-          ontierfilter={(id) => setPreference("filterTier", id)}
-          ondrop={handleCollectionDrop}
-        />
+        <div class="lib-tools">
+          <LibraryFilters
+            filterStatus={prefs.filterStatus}
+            filterCollection={prefs.filterCollection}
+            filterTier={prefs.filterTier}
+            {tierFilterOptions}
+            collections={$userdataStore.collections}
+            onstatusfilter={(s) => setPreference("filterStatus", s)}
+            oncollectionfilter={(id) => setPreference("filterCollection", id)}
+            ontierfilter={(id) => setPreference("filterTier", id)}
+            ondrop={handleCollectionDrop}
+          />
+          <LibrarySortControls
+            bind:this={sortControls}
+            {listMode}
+            sortBy={prefs.sortBy}
+            sortDirection={prefs.sortDirection}
+            {columns}
+            onsort={setLibrarySort}
+            oncolumns={(next) => setPreference("libraryColumns", next)}
+          />
+        </div>
 
         {#if $libraryStore.scanning}
           <div class="grid">
@@ -675,7 +705,7 @@
               </section>
             {/each}
           </div>
-        {:else if $userdataStore.preferences.viewMode === "grid"}
+        {:else if !listMode}
           <div class="grid">
             {#each visibleBooks as book, i (book.filePath)}
               <BookCard
@@ -702,28 +732,66 @@
             {/if}
           </div>
         {:else}
-          <div class="list">
-            {#each visibleBooks as book (book.filePath)}
-              <BookListItem
-                {book}
-                userData={$userdataStore.books[book.filePath]}
-                collections={$userdataStore.collections}
-                position={$libraryStore.positions[book.filePath]}
-                {selectionMode}
-                selected={selectedBooks.has(book.filePath)}
-                onedit={openEdit}
-                onplay={handlePlay}
-                ondetails={(b) => (detailsBook = b)}
-                onstatus={handleStatus}
-                onremove={handleRemoveRequest}
-                onsplit={(b) => (confirmSplit = b)}
-                ontoggleselect={(b, range) => toggleSelection(b.filePath, range)}
-              />
-            {/each}
-            {#if hasMore}
-              <div use:loadMoreAction class="load-sentinel"></div>
-            {/if}
+          <div class="list-scroll">
+            <table class="book-list" class:selecting={selectionMode} aria-label="Books" style:min-width={`${tableWidth}rem`}>
+              <colgroup>
+                <col />
+                {#each columns.slice(1) as column (column)}
+                  <col style:width={`${LIBRARY_COLUMNS[column].width}rem`} />
+                {/each}
+                <col style:width={`${LIBRARY_ROW_ACTION_WIDTH}rem`} />
+              </colgroup>
+              <thead>
+                <tr>
+                  {#each columns as column (column)}
+                    {@const active = prefs.sortBy === column}
+                    <th scope="col" class:title-column={column === "title"}
+                      aria-sort={active ? (prefs.sortDirection === "asc" ? "ascending" : "descending") : undefined}
+                    >
+                      <button class="column-heading" class:active data-press="none"
+                        onclick={() => sortFromHeader(column)}
+                        oncontextmenu={(e) => {
+                          e.preventDefault();
+                          void sortControls?.openColumns();
+                        }}
+                      >
+                        <span>{LIBRARY_COLUMNS[column].label}</span>
+                        {#if active}
+                          <span class="material-symbols-outlined" aria-hidden="true">
+                            {prefs.sortDirection === "asc" ? "arrow_upward" : "arrow_downward"}
+                          </span>
+                        {/if}
+                      </button>
+                    </th>
+                  {/each}
+                  <th scope="col" aria-label="Book actions"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each visibleBooks as book (book.filePath)}
+                  <BookListItem
+                    {book}
+                    userData={$userdataStore.books[book.filePath]}
+                    collections={$userdataStore.collections}
+                    position={$libraryStore.positions[book.filePath]}
+                    {columns}
+                    {selectionMode}
+                    selected={selectedBooks.has(book.filePath)}
+                    onedit={openEdit}
+                    onplay={handlePlay}
+                    ondetails={(b) => (detailsBook = b)}
+                    onstatus={handleStatus}
+                    onremove={handleRemoveRequest}
+                    onsplit={(b) => (confirmSplit = b)}
+                    ontoggleselect={(b, range) => toggleSelection(b.filePath, range)}
+                  />
+                {/each}
+              </tbody>
+            </table>
           </div>
+          {#if hasMore}
+            <div use:loadMoreAction class="load-sentinel"></div>
+          {/if}
         {/if}
       </div>
     {/if}
@@ -971,12 +1039,53 @@
     gap: 0.7rem;
   }
 
-  .list {
+  .lib-tools {
     display: flex;
-    flex-direction: column;
-    gap: 0.28rem;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.48rem 1rem;
   }
 
+  .list-scroll { overflow-x: auto; }
+
+  .book-list {
+    width: 100%;
+    table-layout: fixed;
+    border-spacing: 0 0.25rem;
+  }
+
+  .book-list th {
+    padding: 0;
+    border-block-end: 1px solid var(--color-outline-variant);
+    text-align: left;
+  }
+
+  .book-list th + th .column-heading {
+    border-inline-start: 1px solid var(--color-outline-variant);
+  }
+
+  .column-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    width: 100%;
+    min-height: 1.95rem;
+    padding: 0 0.55rem;
+    border: 0;
+    background: none;
+    color: var(--color-text-variant);
+    text-align: left;
+    font: 700 0.73rem var(--font-label);
+    cursor: pointer;
+  }
+
+  .title-column .column-heading { padding-inline-start: 4.6rem; }
+  .book-list.selecting .title-column .column-heading { padding-inline-start: 6.8rem; }
+  .column-heading .material-symbols-outlined { font-size: 0.89rem; color: var(--color-primary); }
+  .column-heading:hover, .column-heading:focus-visible { background: var(--color-surface-high); }
+  .column-heading:focus-visible { outline-offset: -2px; }
+  .column-heading.active { color: var(--color-text); }
   .load-sentinel {
     height: 1px;
     grid-column: 1 / -1;

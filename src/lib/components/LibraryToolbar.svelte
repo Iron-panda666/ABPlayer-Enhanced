@@ -1,19 +1,17 @@
 <script lang="ts">
   /**
-   * Library header (handoff 1a): title + count on the left; search, sort,
+   * Library header (handoff 1a): title + count on the left; search,
    * view toggle, an overflow menu and the one filled button on the right.
    *
    * The status / tier / collection chips are no longer here — they belong to
    * the "All books" block and live in LibraryFilters.svelte.
    */
   import { onDestroy } from "svelte";
-  import type { SortBy } from "../types";
   import ViewToggle from "./ViewToggle.svelte";
   import { IconButton, Panel, Pill } from "./ui";
 
   interface Props {
     viewMode: "grid" | "list";
-    sortBy: SortBy;
     bookCount: number;
     folders: string[];
     scanning: boolean;
@@ -22,7 +20,6 @@
     /** Selection mode is on: the Select books button reads as pressed. */
     selecting?: boolean;
     onviewchange: (m: "grid" | "list") => void;
-    onsortchange: (s: SortBy) => void;
     onselect: () => void;
     onsearch: (q: string) => void;
     onaddfolder: () => void;
@@ -37,7 +34,6 @@
 
   let {
     viewMode,
-    sortBy,
     bookCount,
     folders,
     scanning,
@@ -45,7 +41,6 @@
     hasBooks,
     selecting = false,
     onviewchange,
-    onsortchange,
     onselect,
     onsearch,
     onaddfolder,
@@ -58,16 +53,8 @@
     onmanagecollections,
   }: Props = $props();
 
-  const SORT_OPTIONS: { value: SortBy; label: string }[] = [
-    { value: "title", label: "Title" },
-    { value: "author", label: "Author" },
-    { value: "recent", label: "Recent" },
-    { value: "status", label: "Status" },
-    { value: "series", label: "Series" },
-  ];
-
   /** One panel at a time, closed by the Panel's own outside-click contract. */
-  let menu = $state<"sort" | "folders" | "more" | null>(null);
+  let menu = $state<"folders" | "more" | null>(null);
   let searchInput = $state("");
   let searchEl = $state<HTMLInputElement | null>(null);
   let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -103,7 +90,6 @@
     fn();
   }
 
-  let sortLabel = $derived(SORT_OPTIONS.find((s) => s.value === sortBy)?.label ?? "Title");
   let busy = $derived(scanning || enriching);
 </script>
 
@@ -139,42 +125,6 @@
           <button class="lh-search-clear" onclick={clearSearch} aria-label="Clear search">
             <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
-        {/if}
-      </div>
-
-      <div class="lh-anchor">
-        <Pill
-          label={sortLabel}
-          icon="expand_more"
-          height="2.1rem"
-          title="Sort by"
-          ariaHasPopup
-          ariaExpanded={menu === "sort"}
-          onclick={() => (menu = menu === "sort" ? null : "sort")}
-        />
-        {#if menu === "sort"}
-          <Panel
-            label="Sort by"
-            origin="top right"
-            width="9.7rem"
-            style="top: 2.5rem; right: 0;"
-            onclose={() => (menu = null)}
-          >
-            {#each SORT_OPTIONS as opt, i (opt.value)}
-              <button
-                class="lh-item"
-                class:selected={sortBy === opt.value}
-                role="menuitem"
-                style="animation-delay: calc(var(--motion-stagger) * {i});"
-                onclick={() => run(() => onsortchange(opt.value))}
-              >
-                {opt.label}
-                {#if sortBy === opt.value}
-                  <span class="material-symbols-outlined lh-check" aria-hidden="true">check</span>
-                {/if}
-              </button>
-            {/each}
-          </Panel>
         {/if}
       </div>
 
@@ -274,7 +224,7 @@
 <style>
   /* Handoff: the header clips and the search field shrinks; nothing in it
      wraps to a second line. The clipping is left to .app-content (overflow
-     hidden at the window edge) rather than set here, because the sort,
+     hidden at the window edge) rather than set here, because the
      overflow and Folder menus are anchored inside this row and an overflow
      on it would clip them too. */
   .lh {
@@ -446,18 +396,9 @@
     cursor: not-allowed;
   }
 
-  .lh-item.selected {
-    font-weight: 700;
-  }
-
   .lh-item .material-symbols-outlined {
     font-size: 1.05rem;
     color: var(--color-text-variant);
-  }
-
-  .lh-check {
-    margin-left: auto;
-    color: var(--color-primary) !important;
   }
 
   .lh-folder {

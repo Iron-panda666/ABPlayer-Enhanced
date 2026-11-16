@@ -1,8 +1,9 @@
 <script lang="ts">
   import { bookDragSource } from "../utils/pointerDrag";
   import { Cover } from "./ui";
-  import type { BookMeta, BookStatus, UserBookData, Collection } from "../types";
-  import { formatTime, progressPercent } from "../utils/format";
+  import type { BookMeta, BookStatus, UserBookData, Collection, SortBy } from "../types";
+  import { formatTime } from "../utils/format";
+  import { DEFAULT_LIBRARY_COLUMNS, lastPlayedTime, libraryProgress, type LibraryPosition } from "../utils/libraryColumns";
   import { getDisplayTitle, getDisplayAuthor, getDisplayCover } from "../stores/userdataStore";
   import StatusBadge from "./StatusBadge.svelte";
   import CollectionTag from "./CollectionTag.svelte";
@@ -12,7 +13,8 @@
     book: BookMeta;
     userData?: UserBookData | undefined;
     collections: Collection[];
-    position?: { position: number; duration: number } | undefined;
+    columns?: SortBy[];
+    position?: LibraryPosition | undefined;
     selectionMode?: boolean;
     selected?: boolean;
     onedit: (book: BookMeta) => void;
@@ -27,16 +29,16 @@
     ontoggleselect?: (book: BookMeta, range: boolean) => void;
   }
 
-  let { book, userData, collections, position, selectionMode = false, selected = false, onedit, onplay, ondetails, onstatus, onremove, onsplit, ontoggleselect }: Props = $props();
+  let {
+    book, userData, collections, columns = DEFAULT_LIBRARY_COLUMNS, position,
+    selectionMode = false, selected = false, onedit, onplay, ondetails, onstatus, onremove, onsplit, ontoggleselect,
+  }: Props = $props();
 
   let title = $derived(getDisplayTitle(book, userData));
   let author = $derived(getDisplayAuthor(book, userData));
   let cover = $derived(getDisplayCover(book, userData));
   let status = $derived(userData?.status || "not_started");
-  // A book marked not started shows no progress at all, whatever was saved
-  let progress = $derived(
-    position && status !== "not_started" ? progressPercent(position.position, position.duration) : 0,
-  );
+  let progress = $derived(libraryProgress(book, status, position));
   let bookCollections = $derived(
     (userData?.collections || [])
       .map((id) => collections.find((c) => c.id === id))
@@ -51,6 +53,24 @@
   );
 
   let contextMenu = $state<{ x: number; y: number } | null>(null);
+  const dateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: "medium" });
+
+  function columnText(column: SortBy): string | null {
+    switch (column) {
+      case "author": return author;
+      case "duration": return book.duration > 0 ? formatTime(book.duration) : null;
+      case "progress": return `${progress}%`;
+      case "series": return seriesLabel;
+      case "narrator": return userData?.narrator || null;
+      case "publishYear": return userData?.publishYear == null ? null : String(userData.publishYear);
+      case "genre": return userData?.genre || null;
+      case "recent": {
+        const timestamp = lastPlayedTime(position);
+        return timestamp === null ? null : dateFormatter.format(timestamp);
+      }
+      default: return null;
+    }
+  }
 
   function handleContextMenu(e: MouseEvent) {
     e.preventDefault();
@@ -58,99 +78,117 @@
   }
 </script>
 
-<div
+<tr
   class="list-item"
   class:selected
-  role="listitem"
   oncontextmenu={handleContextMenu}
-  use:bookDragSource={{ payload: { filePath: book.filePath } }}
 >
-  <button
-    class="list-item-main"
-    data-press="none"
-    onclick={(e) => selectionMode && ontoggleselect?.(book, e.shiftKey)}
-    aria-pressed={selectionMode ? selected : undefined}
-    ondblclick={() => !selectionMode && onplay(book)}
-  >
-    {#if selectionMode}
-      <span class="select-check" class:on={selected}>
-        <span class="material-symbols-outlined" aria-hidden="true">
-          {selected ? "check_circle" : "radio_button_unchecked"}
+  <td>
+    <button
+      class="list-item-main"
+      data-press="none"
+      use:bookDragSource={{ payload: { filePath: book.filePath } }}
+      aria-label={selectionMode ? `Select ${title}` : `Play ${title}`}
+      aria-pressed={selectionMode ? selected : undefined}
+      onclick={(e) => {
+        if (selectionMode) ontoggleselect?.(book, e.shiftKey);
+        else if (e.detail === 0) onplay(book);
+      }}
+      ondblclick={() => !selectionMode && onplay(book)}
+    >
+      {#if selectionMode}
+        <span class="select-check" class:on={selected}>
+          <span class="material-symbols-outlined" aria-hidden="true">
+            {selected ? "check_circle" : "radio_button_unchecked"}
+          </span>
+        </span>
+      {/if}
+      <span class="cover-slot">
+        <Cover src={cover} alt="" size="3.2rem" natural logged={book.fileless === true} />
+      </span>
+      <span class="info">
+        <span class="title" title={title}>{title}</span>
+        <span class="info-bottom">
+          {#if progress > 0 && !columns.includes("progress")}
+            <span class="progress-track">
+              <span class="progress-fill" style:width="{progress}%"></span>
+            </span>
+            <span class="progress-text">{progress}%</span>
+          {/if}
+          {#if !columns.includes("status")}
+            <StatusBadge {status} />
+          {/if}
+          {#if seriesLabel && !columns.includes("series")}
+            <span class="series-badge">{seriesLabel}</span>
+          {/if}
+          {#each bookCollections as col (col.id)}
+            <CollectionTag name={col.name} color={col.color} />
+          {/each}
         </span>
       </span>
-    {/if}
-    <span class="cover-slot">
-      <Cover src={cover} alt="" size="3.2rem" natural logged={book.fileless === true} />
-    </span>
-    <div class="info">
-      <div class="info-top">
-        <span class="title">{title}</span>
-        <span class="author">{author}</span>
-        {#if book.duration > 0}
-          <span class="duration">{formatTime(book.duration)}</span>
-        {/if}
-      </div>
-      <div class="info-bottom">
-        {#if progress > 0}
-          <div class="progress-track">
-            <div class="progress-fill" style:width="{progress}%"></div>
-          </div>
-          <span class="progress-text">{Math.round(progress)}%</span>
-        {/if}
+    </button>
+  </td>
+  {#each columns.slice(1) as column (column)}
+    {@const value = columnText(column)}
+    <td class="data-cell">
+      {#if column === "status" && status !== "not_started"}
         <StatusBadge {status} />
-        {#if seriesLabel}
-          <span class="series-badge">{seriesLabel}</span>
-        {/if}
-        {#each bookCollections as col (col.id)}
-          <CollectionTag name={col.name} color={col.color} />
-        {/each}
-      </div>
+      {:else if column === "status"}
+        <span class="cell-text">New</span>
+      {:else}
+        <span class="cell-text" class:missing={value === null} title={value ?? undefined}>{value ?? "—"}</span>
+      {/if}
+    </td>
+  {/each}
+  <td>
+    <div class="row-actions">
+      {#if ondetails}
+        <button class="row-btn" onclick={() => ondetails(book)} title="View book" aria-label="View book">
+          <span class="material-symbols-outlined" aria-hidden="true">info</span>
+        </button>
+      {/if}
+      <button class="row-btn" onclick={() => onedit(book)} title="Edit" aria-label="Edit">
+        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+      </button>
+      {#if onsplit && book.tracks.length > 1}
+        <button class="row-btn" onclick={() => onsplit(book)} title="Split into files" aria-label="Split into files">
+          <span class="material-symbols-outlined" aria-hidden="true">call_split</span>
+        </button>
+      {/if}
+      {#if onremove}
+        <button class="row-btn danger" onclick={() => onremove(book)} title="Remove" aria-label="Remove">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      {/if}
     </div>
-  </button>
-  {#if ondetails}
-    <button class="row-btn" onclick={() => ondetails(book)} title="View book" aria-label="View book">
-      <span class="material-symbols-outlined">info</span>
-    </button>
-  {/if}
-  <button class="row-btn" onclick={() => onedit(book)} title="Edit" aria-label="Edit">
-    <span class="material-symbols-outlined">edit</span>
-  </button>
-  {#if onsplit && book.tracks.length > 1}
-    <button class="row-btn" onclick={() => onsplit(book)} title="Split into files" aria-label="Split into files">
-      <span class="material-symbols-outlined">call_split</span>
-    </button>
-  {/if}
-  {#if onremove}
-    <button class="row-btn danger" onclick={() => onremove(book)} title="Remove" aria-label="Remove">
-      <span class="material-symbols-outlined">close</span>
-    </button>
-  {/if}
-</div>
-
-{#if contextMenu}
-  <BookMenu
-    {book}
-    {userData}
-    {collections}
-    x={contextMenu.x}
-    y={contextMenu.y}
-    onclose={() => (contextMenu = null)}
-    onplay={() => onplay(book)}
-    ondetails={ondetails ? () => ondetails(book) : undefined}
-    onedit={() => onedit(book)}
-    onstatus={onstatus ? (s) => onstatus(book, s) : undefined}
-    onsplit={onsplit ? () => onsplit(book) : undefined}
-    onremove={onremove ? () => onremove(book) : undefined}
-  />
-{/if}
+    {#if contextMenu}
+      <BookMenu
+        {book}
+        {userData}
+        {collections}
+        x={contextMenu.x}
+        y={contextMenu.y}
+        onclose={() => (contextMenu = null)}
+        onplay={() => onplay(book)}
+        ondetails={ondetails ? () => ondetails(book) : undefined}
+        onedit={() => onedit(book)}
+        onstatus={onstatus ? (s) => onstatus(book, s) : undefined}
+        onsplit={onsplit ? () => onsplit(book) : undefined}
+        onremove={onremove ? () => onremove(book) : undefined}
+      />
+    {/if}
+  </td>
+</tr>
 
 <style>
   .list-item {
-    display: flex;
-    align-items: center;
-    border-radius: var(--radius-md);
+    position: relative;
     transition: background 0.15s;
   }
+
+  td { padding: 0; }
+  td:first-child { border-radius: var(--radius-md) 0 0 var(--radius-md); }
+  td:last-child { border-radius: 0 var(--radius-md) var(--radius-md) 0; }
 
   .list-item:hover {
     background: var(--color-surface);
@@ -161,7 +199,7 @@
   }
 
   .list-item-main {
-    flex: 1;
+    width: 100%;
     display: flex;
     align-items: center;
     gap: 0.7rem;
@@ -173,6 +211,13 @@
     cursor: pointer;
     text-align: left;
     min-width: 0;
+  }
+
+  /* Keep the whole row clickable while exposing separate table cells. */
+  .list-item-main::after {
+    content: "";
+    position: absolute;
+    inset: 0;
   }
 
   /* The circle is part of the row button, so the whole row selects, circle included */
@@ -212,13 +257,6 @@
     gap: 3px;
   }
 
-  .info-top {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    min-width: 0;
-  }
-
   .title {
     font-family: var(--font-headline);
     font-size: var(--font-size-md);
@@ -230,27 +268,28 @@
     min-width: 0;
   }
 
-  .author {
+  .data-cell {
+    padding-inline: 0.55rem;
     font-family: var(--font-label);
     font-size: var(--font-size-xs);
     color: var(--color-text-variant);
-    white-space: nowrap;
-    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
   }
 
-  .duration {
-    font-family: var(--font-label);
-    font-size: var(--font-size-xs);
-    color: var(--color-outline);
+  .cell-text {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
     white-space: nowrap;
-    flex-shrink: 0;
-    margin-left: auto;
   }
+
+  .missing { color: var(--color-outline); }
 
   .info-bottom {
     display: flex;
     align-items: center;
     gap: 6px;
+    overflow: hidden;
   }
 
   .progress-track {
@@ -261,6 +300,7 @@
   }
 
   .progress-fill {
+    display: block;
     height: 100%;
     background: var(--color-primary-container);
   }
@@ -280,7 +320,15 @@
     white-space: nowrap;
   }
 
+  .row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 0.15rem;
+  }
+
   .row-btn {
+    position: relative;
     background: none;
     border: none;
     color: var(--color-outline);
