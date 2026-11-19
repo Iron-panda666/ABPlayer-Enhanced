@@ -11,3 +11,15 @@ dist-builds/
 docs/ABPlayer/
 docs/ABPlayer.zip
 docs/playerSection/
+
+# Local runtime profiles, credentials and backups
+src-tauri/gen/
+library.json
+positions.json
+bookmarks.json
+userdata.json
+statistics.json
+tierlists.json
+.window-state.json
+*.abplayer-backup
+*.bundle
