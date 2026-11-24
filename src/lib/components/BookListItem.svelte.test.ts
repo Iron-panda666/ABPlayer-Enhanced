@@ -44,6 +44,11 @@ afterEach(() => {
 });
 
 describe("BookListItem", () => {
+  it.each(["paused", "constructor", { toString: null }])("renders an unexpected status %s without hiding or crashing the row", (status) => {
+    render({ userData: { ...defaultUserBookData(), status } });
+    expect(target.textContent).toContain("Dune");
+    expect(target.textContent).toContain("Unknown");
+  });
   it("shows no circle outside selection mode", () => {
     render({});
     expect(target.querySelector(".select-check")).toBeNull();

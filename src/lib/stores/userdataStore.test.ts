@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import { get } from "svelte/store";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { readFile, writeTextFile } from "@tauri-apps/plugin-fs";
-import type { BookMeta, UserPreferences } from "../types";
+import type { BookMeta, UserBookData, UserPreferences } from "../types";
 import { resetStores, makeStore } from "../../test/memoryStore";
 import {
   userdataStore,
@@ -15,6 +15,7 @@ import {
   importLibrary,
   normalizeAudioSettings,
   DEFAULT_AUDIO_SETTINGS,
+  setPreference,
 } from "./userdataStore";
 import { tierListsStore, loadTierLists, createTierList, assignBookToTier } from "./tierListStore";
 import { libraryStore, addFilelessBook } from "./libraryStore";
@@ -93,6 +94,40 @@ describe("sortAndFilterBooks", () => {
   it("filters by status", () => {
     const out = sortAndFilterBooks([a, b, c], userData, {}, { ...prefs, filterStatus: "finished" });
     expect(out.map((x) => x.filePath)).toEqual(["a"]);
+  });
+
+  it("Unfinished excludes only finished books, including when statuses are missing or unexpected", () => {
+    const entries = ["finished", "in_progress", "not_started", "unset", "empty", "null", "future", "uppercase", "malformed", "no-data"]
+      .map((id) => book(id, id));
+    const data: Record<string, UserBookData> = {};
+    const statuses: Record<string, unknown> = {
+      finished: "finished", in_progress: "in_progress", not_started: "not_started",
+      unset: undefined, empty: "", null: null, future: "paused", uppercase: "Finished", malformed: { toString: null },
+    };
+    for (const [id, status] of Object.entries(statuses)) {
+      // Deliberately emulate older/imported records outside the current status union.
+      data[id] = { ...normalizeUserBookData(undefined), status } as UserBookData;
+    }
+    const out = sortAndFilterBooks(entries, data, {}, { ...prefs, filterStatus: "unfinished" });
+    expect(new Set(out.map((entry) => entry.filePath))).toEqual(new Set([
+      "in_progress", "not_started", "unset", "empty", "null", "future", "uppercase", "malformed", "no-data",
+    ]));
+    expect(sortAndFilterBooks(entries, data, {}, { ...prefs, filterStatus: "unfinished", sortBy: "status" }))
+      .toHaveLength(entries.length - 1);
+  });
+
+  it("combines Unfinished with an existing collection filter", () => {
+    const data = { ...userData, b: { ...userData.b, collections: ["col"] } };
+    const out = sortAndFilterBooks([a, b, c], data, {}, {
+      ...prefs, filterStatus: "unfinished", filterCollection: "col",
+    });
+    expect(out.map((entry) => entry.filePath)).toEqual(["b"]);
+  });
+
+  it("restores the Unfinished filter after preferences are reloaded", async () => {
+    await setPreference("filterStatus", "unfinished");
+    await loadUserData();
+    expect(get(userdataStore).preferences.filterStatus).toBe("unfinished");
   });
 
   it("filters by collection", () => {

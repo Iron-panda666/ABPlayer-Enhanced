@@ -17,6 +17,7 @@ An ABPlayer fork with a tray mini player, configurable library columns, playback
 | Expanded player | Fill the content area while keeping the sidebar and player header available. |
 | Audio visualizations | Choose a spectrum, an oscilloscope, a level meter or Off in **Settings → Audio**. |
 | Library columns | Add, hide and rearrange optional columns. Click a heading to sort and click it again to reverse the direction. |
+| Unfinished filter | Show every book except those marked Finished, including books with unset or unexpected statuses. |
 | Metadata lookup | Search Open Library by title, author or ISBN and review the fields before saving them. |
 | Book editing | Keep unsaved edits until you save or explicitly discard them. Store the original book year and audiobook release year separately, and enter library length as H:MM:SS or decimal hours. |
 | Stream Deck hotkeys | Assign global keyboard shortcuts for playback, volume, mute and bookmarks. |
@@ -76,9 +77,9 @@ The installed app is named **ABPlayer Fork**. Its Windows profile is stored in `
 
 ## Project status
 
-See the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) for the measured scope of the changes and the [1.7.4 release notes](docs/releases/1.7.4-enhanced.md) for book editing fixes. Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
+See the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md), the [1.7.4 book editing fixes](docs/releases/1.7.4-enhanced.md) and the [1.7.5 Unfinished filter](docs/releases/1.7.5-enhanced.md). Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
 
-The Windows build is version **1.7.4**. The frontend suite has 186 passing tests. Standalone backup tests cover folder relocation and preservation of the previous profile. The complete native test suite encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
+The Windows build is version **1.7.5**. The frontend suite has 192 passing tests. Standalone backup tests cover folder relocation and preservation of the previous profile. The complete native test suite encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
 
 Open Library receives the query when you select **Search**. Imported catalog fields are stored in the player's library.
 

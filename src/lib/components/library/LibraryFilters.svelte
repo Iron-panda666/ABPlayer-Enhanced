@@ -35,6 +35,7 @@
 
   const STATUS_FILTERS: { value: FilterStatus; label: string }[] = [
     { value: "all", label: "All" },
+    { value: "unfinished", label: "Unfinished" },
     { value: "in_progress", label: "Reading" },
     { value: "finished", label: "Finished" },
     { value: "not_started", label: "New" },

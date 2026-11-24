@@ -14,7 +14,8 @@
     finished: { label: "Done", color: "var(--color-secondary)" },
   };
 
-  let current = $derived(config[status]);
+  let current = $derived(typeof status === "string" && Object.hasOwn(config, status)
+    ? config[status] : { label: "Unknown", color: "var(--color-outline)" });
 </script>
 
 {#if status !== "not_started"}

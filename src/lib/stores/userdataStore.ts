@@ -469,6 +469,8 @@ export function sortAndFilterBooks(
   if (prefs.filterStatus !== "all") {
     result = result.filter((b) => {
       const ud = userData[b.filePath];
+      // This is an exclusion, not a whitelist: retain unset and future statuses.
+      if (prefs.filterStatus === "unfinished") return ud?.status !== "finished";
       const status = ud?.status || "not_started";
       return status === prefs.filterStatus;
     });
@@ -487,7 +489,10 @@ export function sortAndFilterBooks(
       case "title": return getDisplayTitle(book, ud);
       case "author": return getDisplayAuthor(book, ud);
       case "duration": return getDisplayDuration(book, ud) || null;
-      case "status": return STATUS_ORDER[ud?.status ?? "not_started"];
+      case "status": {
+        const status = ud?.status ?? "not_started";
+        return typeof status === "string" && Object.hasOwn(STATUS_ORDER, status) ? STATUS_ORDER[status] : null;
+      }
       case "progress": return libraryProgress(book, ud?.status ?? "not_started", positions[book.filePath]);
       case "series": return ud?.series?.trim() || null;
       case "narrator": return ud?.narrator?.trim() || null;
