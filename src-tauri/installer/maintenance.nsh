@@ -1,4 +1,4 @@
-; ABPlayer Fork's maintenance and one-time original-profile import.
+; ABPlayer-Enhanced's maintenance and one-time original-profile import.
 Var ForkMaintenance
 Var ForkUpdate
 Var ForkUninstallOnly
@@ -18,7 +18,7 @@ Function ForkDetectMaintenance
   Pop $0
   ${If} $0 = -1
     IfSilent +2
-      MessageBox MB_OK|MB_ICONEXCLAMATION "A newer ABPlayer Fork is already installed. Use its installer or remove it first."
+      MessageBox MB_OK|MB_ICONEXCLAMATION "A newer ABPlayer-Enhanced is already installed. Use its installer or remove it first."
     SetErrorLevel 3
     Abort
   ${ElseIf} $0 <> 0
@@ -29,7 +29,7 @@ FunctionEnd
 
 Function ForkUpdatePage
   Call SkipIfPassive
-  !insertmacro MUI_HEADER_TEXT "Update ABPlayer Fork" "Install version ${VERSION} in the current location"
+  !insertmacro MUI_HEADER_TEXT "Update ABPlayer-Enhanced" "Install version ${VERSION} in the current location"
   nsDialogs::Create 1018
   Pop $0
   ${IfThen} $0 == error ${|} Abort ${|}
@@ -64,8 +64,9 @@ FunctionEnd
   Push "${MAINBINARYNAME}.exe"
   Call ${scope}ForkWaitForProcess
   ReadRegStr $0 SHCTX "${UNINSTKEY}" "MainBinaryName"
-  ${If} $0 == "abplayer.exe"
-    Push "abplayer.exe"
+  ${If} $0 != ""
+  ${AndIf} $0 != "${MAINBINARYNAME}.exe"
+    Push $0
     Call ${scope}ForkWaitForProcess
   ${EndIf}
 !macroend
@@ -81,7 +82,7 @@ FunctionEnd
 Function ForkBackupFailed
   DetailPrint "Automatic profile backup failed. Program files were not replaced."
   IfSilent no_backup_dialog
-    MessageBox MB_OK|MB_ICONSTOP "Setup could not create and verify the profile backup. No program files were updated.$\r$\n$\r$\nQuit ABPlayer Fork and check available disk space and write access to:$\r$\n$APPDATA\${BUNDLEID}-backups$\r$\n$\r$\nThen run setup again."
+    MessageBox MB_OK|MB_ICONSTOP "Setup could not create and verify the profile backup. No program files were updated.$\r$\n$\r$\nQuit ABPlayer-Enhanced and check available disk space and write access to:$\r$\n$APPDATA\${BUNDLEID}-backups$\r$\n$\r$\nThen run setup again."
   no_backup_dialog:
   SetErrorLevel 4
   Abort
@@ -103,7 +104,7 @@ Function ForkOriginalProfilePage
     Abort
   ${EndIf}
 
-  !insertmacro MUI_HEADER_TEXT "Copy your ABPlayer library" "Bring your listening data into ABPlayer Fork"
+  !insertmacro MUI_HEADER_TEXT "Copy your ABPlayer library" "Bring your listening data into ABPlayer-Enhanced"
   nsDialogs::Create 1018
   Pop $0
   ${IfThen} $0 == error ${|} Abort ${|}

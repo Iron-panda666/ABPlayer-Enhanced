@@ -60,9 +60,12 @@ ${StrLoc}
 !define WEBVIEW2BOOTSTRAPPERPATH "{{webview2_bootstrapper_path}}"
 !define WEBVIEW2INSTALLERPATH "{{webview2_installer_path}}"
 !define MINIMUMWEBVIEW2VERSION "{{minimum_webview2_version}}"
-!define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCTNAME}"
+; Historical identity remains stable when the visible product name changes.
+!define INSTALLATIONKEY "ABPlayer Fork"
+!define LEGACYPRODUCTNAME "ABPlayer Fork"
+!define UNINSTKEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${INSTALLATIONKEY}"
 !define MANUKEY "Software\${MANUFACTURER}"
-!define MANUPRODUCTKEY "${MANUKEY}\${PRODUCTNAME}"
+!define MANUPRODUCTKEY "${MANUKEY}\${INSTALLATIONKEY}"
 !define UNINSTALLERSIGNCOMMAND "{{uninstaller_sign_cmd}}"
 !define ESTIMATEDSIZE "{{estimated_size}}"
 !define STARTMENUFOLDER "{{start_menu_folder}}"
@@ -242,7 +245,7 @@ Function PageReinstall
   ${If} $R0 = 0
     StrCpy $R1 "$(alreadyInstalledLong)"
     StrCpy $R2 "Repair or reinstall (keep library data)"
-    StrCpy $R3 "Uninstall ABPlayer Fork"
+    StrCpy $R3 "Uninstall ${PRODUCTNAME}"
     !insertmacro MUI_HEADER_TEXT "$(alreadyInstalled)" "$(chooseMaintenanceOption)"
   ; Upgrading
   ${ElseIf} $R0 = 1
@@ -732,6 +735,7 @@ Section Install
 
   ; Remove old main binary if it doesn't match new main binary name
   ReadRegStr $OldMainBinaryName SHCTX "${UNINSTKEY}" "MainBinaryName"
+  Call MigrateLegacyProductShortcuts
   ${If} $OldMainBinaryName != ""
   ${AndIf} $OldMainBinaryName != "${MAINBINARYNAME}.exe"
     Delete "$INSTDIR\$OldMainBinaryName"
@@ -941,6 +945,33 @@ Function RestorePreviousInstallLocation
   ReadRegStr $4 SHCTX "${MANUPRODUCTKEY}" ""
   StrCmp $4 "" +2 0
     StrCpy $INSTDIR $4
+FunctionEnd
+
+; Only touch links that point to this installation's recorded old executable.
+!macro MigrateLegacyProductShortcut directory
+  !insertmacro IsShortcutTarget "${directory}\${LEGACYPRODUCTNAME}.lnk" "$INSTDIR\$OldMainBinaryName"
+  Pop $0
+  ${If} $0 = 1
+    !insertmacro SetShortcutTarget "${directory}\${LEGACYPRODUCTNAME}.lnk" "$INSTDIR\${MAINBINARYNAME}.exe"
+    ; Rename does not overwrite an unrelated existing destination shortcut.
+    ClearErrors
+    Rename "${directory}\${LEGACYPRODUCTNAME}.lnk" "${directory}\${PRODUCTNAME}.lnk"
+    ${IfNot} ${Errors}
+      !insertmacro SetLnkAppUserModelId "${directory}\${PRODUCTNAME}.lnk"
+    ${EndIf}
+  ${EndIf}
+!macroend
+
+Function MigrateLegacyProductShortcuts
+  ${If} "${PRODUCTNAME}" == "${LEGACYPRODUCTNAME}"
+  ${OrIf} $OldMainBinaryName == ""
+    Return
+  ${EndIf}
+  !insertmacro MigrateLegacyProductShortcut "$DESKTOP"
+  !insertmacro MigrateLegacyProductShortcut "$SMPROGRAMS"
+  ${If} $AppStartMenuFolder != ""
+    !insertmacro MigrateLegacyProductShortcut "$SMPROGRAMS\$AppStartMenuFolder"
+  ${EndIf}
 FunctionEnd
 
 Function Skip

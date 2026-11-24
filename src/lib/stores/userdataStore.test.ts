@@ -124,10 +124,30 @@ describe("sortAndFilterBooks", () => {
     expect(out.map((entry) => entry.filePath)).toEqual(["b"]);
   });
 
-  it("restores the Unfinished filter after preferences are reloaded", async () => {
-    await setPreference("filterStatus", "unfinished");
+  it.each(["unfinished", "zero_progress"] as const)("restores the %s filter after preferences are reloaded", async (filter) => {
+    await setPreference("filterStatus", filter);
     await loadUserData();
-    expect(get(userdataStore).preferences.filterStatus).toBe("unfinished");
+    expect(get(userdataStore).preferences.filterStatus).toBe(filter);
+  });
+
+  it("0% progress includes only the actual beginning, not rounded progress or later tracks", () => {
+    const ids = ["untouched", "start", "rounded", "later-track", "finished", "new-with-position"];
+    const books = ids.map((id) => book(id, id));
+    const base = normalizeUserBookData(undefined);
+    const data: Record<string, UserBookData> = {
+      start: { ...base, status: "in_progress" }, rounded: { ...base, status: "in_progress" },
+      "later-track": { ...base, status: "in_progress" }, finished: { ...base, status: "finished" },
+      "new-with-position": { ...base, status: "not_started" },
+    };
+    const positions = {
+      start: { position: 0, duration: 10_000, trackIndex: 0 },
+      rounded: { position: 1, duration: 10_000, trackIndex: 0 },
+      "later-track": { position: 0, duration: 10_000, trackIndex: 1 },
+      finished: { position: 0, duration: 10_000, trackIndex: 0 },
+      "new-with-position": { position: 30, duration: 10_000, trackIndex: 0 },
+    };
+    const out = sortAndFilterBooks(books, data, positions, { ...prefs, filterStatus: "zero_progress" });
+    expect(new Set(out.map((entry) => entry.filePath))).toEqual(new Set(["untouched", "start"]));
   });
 
   it("filters by collection", () => {

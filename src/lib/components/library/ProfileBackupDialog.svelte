@@ -115,7 +115,7 @@
     {#if notice}<p class="feedback" role="status">{notice}</p>{/if}
     {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
     {#if pending}
-      <p class="feedback" role="status">Restore scheduled. Quit ABPlayer Fork and reopen it to apply the backup. Your current profile will be kept as a safety copy.</p>
+      <p class="feedback" role="status">Restore scheduled. Quit ABPlayer-Enhanced and reopen it to apply the backup. Your current profile will be kept as a safety copy.</p>
       <div class="actions">
         <Pill label="Cancel scheduled restore" disabled={busy} onclick={cancelRestore} />
       </div>

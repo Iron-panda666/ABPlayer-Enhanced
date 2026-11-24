@@ -1,6 +1,16 @@
 # Changelog
 
-Changes made in ABPlayer Enhanced. The original player is maintained by [jhidalgo_dev / kurohige](https://github.com/kurohige/ABPlayer).
+Changes made in ABPlayer-Enhanced. The original player is maintained by [jhidalgo_dev / kurohige](https://github.com/kurohige/ABPlayer).
+
+## 1.7.7 — 2026-11-24
+
+- Rename the app, executable, window and tray text to **ABPlayer-Enhanced**.
+- Recognize legacy **ABPlayer Fork** installations and migrate matching shortcuts while preserving the existing installation folder and profile.
+- Refuse updates while either the renamed or registered legacy player is running.
+- Add a persistent **0% progress** filter for the exact beginning of the first track, excluding Finished books and positive positions rounded to zero percent.
+- Add a separate [Windows build guide](docs/BUILD-WINDOWS.md), including using an existing Visual Studio C++ installation.
+
+[Detailed notes](docs/releases/1.7.7-enhanced.md)
 
 ## 1.7.6 — 2026-11-24
 

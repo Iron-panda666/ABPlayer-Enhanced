@@ -1,4 +1,4 @@
-# ABPlayer Enhanced
+# ABPlayer-Enhanced
 
 An ABPlayer fork with a tray mini player, configurable library columns, playback visualizations and full library backups.
 
@@ -17,12 +17,13 @@ An ABPlayer fork with a tray mini player, configurable library columns, playback
 | Expanded player | Fill the content area while keeping the sidebar and player header available. |
 | Audio visualizations | Choose a spectrum, an oscilloscope, a level meter or Off in **Settings → Audio**. |
 | Library columns | Add, hide and rearrange optional columns. Click a heading to sort and click it again to reverse the direction. |
+| 0% progress filter | Show only books at the exact beginning of the first track, excluding Finished books. A small position rounded to 0% does not count. |
 | Unfinished filter | Show every book except those marked Finished, including books with unset or unexpected statuses. |
 | Metadata lookup | Search Open Library by title, author or ISBN and review the fields before saving them. |
 | Book editing | Keep unsaved edits until you save or explicitly discard them. Store the original book year and audiobook release year separately, and enter library length as H:MM:SS or decimal hours. |
 | Stream Deck hotkeys | Assign global keyboard shortcuts for playback, volume, mute and bookmarks. |
 | Full profile backups | Extends the original library export/import with a full profile archive: library, listening positions, bookmarks, covers, settings, tier lists and statistics. Remap audiobook folders when restoring on another PC. |
-| Installer maintenance | Update an existing Fork installation in place, repair installed files or uninstall. Updates and repairs preserve the profile. |
+| Installer maintenance | Update an existing Enhanced or legacy Fork installation in place, repair installed files or uninstall. Updates and repairs preserve the profile. |
 | Automatic pre-update backups | Setup verifies a profile backup before replacing program files and keeps the last 3 automatic archives. Manual backups are not automatically deleted. |
 
 ## A closer look
@@ -65,7 +66,7 @@ Enable the Stream Deck hotkeys in **Settings → Stream Deck**, then assign **Sy
 
 ## Updates and backups
 
-Run the newer Fork installer to update an existing **ABPlayer Fork** installation. Setup reuses its current installation folder and replaces the application files in place, without requiring an uninstall first. Close the player normally before updating; setup waits for it to close rather than terminating playback.
+Run the newer ABPlayer-Enhanced installer to update an existing **ABPlayer-Enhanced** or legacy **ABPlayer Fork** installation. Setup reuses its current installation folder and replaces the application files in place, without requiring an uninstall first. Close the player normally before updating; setup waits for it to close rather than terminating playback.
 
 The library, listening positions, bookmarks, covers and settings live separately in `%APPDATA%\com.ironpanda666.abplayer` and are preserved by updates and repair. Uninstall has a separate option to delete application data.
 
@@ -73,26 +74,17 @@ From **1.7.6**, setup automatically creates and verifies a full backup of an exi
 
 Use **Library → … → Backup and restore** for an additional manual backup or to restore an automatic archive. The dialog shows the automatic backup location. Audiobook audio files are not included in profile archives. Restoring an archive keeps the previous profile as a safety copy.
 
-There is currently no in-app update checker or automatic download. Upgrading the original ABPlayer to the Fork is a separate first installation with an optional original-profile copy; it is not an in-place update of the original application.
+There is currently no in-app update checker or automatic download. Upgrading the original ABPlayer to Enhanced is a separate first installation with an optional original-profile copy; it is not an in-place update of the original application.
 
 ## Build
 
-Install Node.js, Rust and the Windows prerequisites listed in the Tauri documentation.
-
-```sh
-npm ci
-npm run tauri build
-```
-
-The installed app is named **ABPlayer Fork**. Its Windows profile is stored in `%APPDATA%\com.ironpanda666.abplayer`.
-
-[Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+See the separate [Windows build guide](docs/BUILD-WINDOWS.md) for prerequisites, Visual Studio setup and installer commands.
 
 ## Project status
 
-See the complete [Changelog](CHANGELOG.md), the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) and the [1.7.6 automatic backup notes](docs/releases/1.7.6-enhanced.md). Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
+See the complete [Changelog](CHANGELOG.md), the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) and the [1.7.7 release notes](docs/releases/1.7.7-enhanced.md). Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
 
-The Windows build is version **1.7.6**. The frontend suite has 192 passing tests. Nine standalone native backup tests cover archive restoration, relocation, profile locking, backup failures and retention without deleting manual archives. The complete native test suite previously encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
+The Windows build is version **1.7.7**. The frontend suite has 194 passing tests. Nine standalone native backup tests cover archive restoration, relocation, profile locking, backup failures and retention without deleting manual archives. The complete native test suite previously encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
 
 Open Library receives the query when you select **Search**. Imported catalog fields are stored in the player's library.
 

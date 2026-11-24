@@ -104,7 +104,7 @@ describe("Windows notification area", () => {
     expect(get(audioStore).playing).toBe(true);
 
     const items = desktop.menu.mock.calls[0][0].items ?? [];
-    const exit = items.find((item) => "text" in item && item.text === "Quit ABPlayer Fork");
+    const exit = items.find((item) => "text" in item && item.text === "Quit ABPlayer-Enhanced");
     if (!exit || !("action" in exit) || !exit.action) throw new Error("Missing tray Quit command");
     exit.action("quit");
     await vi.waitFor(() => expect(desktop.main.destroy).toHaveBeenCalledOnce());

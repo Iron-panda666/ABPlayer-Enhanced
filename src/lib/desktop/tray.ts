@@ -93,10 +93,10 @@ export async function initTray(openMini: (anchor?: TrayIconEvent["position"]) =>
         if (!icon) throw new Error("The default application icon is missing");
         const menu = await Menu.new({
           items: [
-            { text: "Open ABPlayer Fork", action: () => void showMain().catch(report) },
+            { text: "Open ABPlayer-Enhanced", action: () => void showMain().catch(report) },
             { text: "Mini player", action: () => void openMini().catch(report) },
             { item: "Separator" },
-            { text: "Quit ABPlayer Fork", action: () => {
+            { text: "Quit ABPlayer-Enhanced", action: () => {
               quitting = true;
               void main.close().catch((error) => {
                 quitting = false;
@@ -109,7 +109,7 @@ export async function initTray(openMini: (anchor?: TrayIconEvent["position"]) =>
           id: "abplayer",
           icon,
           menu,
-          tooltip: "ABPlayer Fork",
+          tooltip: "ABPlayer-Enhanced",
           showMenuOnLeftClick: false,
           action: (event) => {
             const clicks = get(userdataStore).preferences.trayClicks;

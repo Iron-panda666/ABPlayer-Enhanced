@@ -285,7 +285,7 @@
         <div class="about-header">
           <span class="material-symbols-outlined about-icon">headphones</span>
           <div>
-            <p class="about-name">ABPlayer Fork</p>
+            <p class="about-name">ABPlayer-Enhanced</p>
             <p class="about-version">v{APP_VERSION}</p>
           </div>
         </div>

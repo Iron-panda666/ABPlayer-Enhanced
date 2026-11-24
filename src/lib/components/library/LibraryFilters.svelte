@@ -38,6 +38,7 @@
     { value: "unfinished", label: "Unfinished" },
     { value: "in_progress", label: "Reading" },
     { value: "finished", label: "Finished" },
+    { value: "zero_progress", label: "0% progress" },
     { value: "not_started", label: "New" },
   ];
 

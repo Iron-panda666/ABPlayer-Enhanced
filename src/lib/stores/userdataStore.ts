@@ -31,6 +31,7 @@ import {
   isLibraryColumn,
   lastPlayedTime,
   libraryProgress,
+  hasZeroProgress,
   normalizeLibraryColumns,
   type LibraryPosition,
 } from "../utils/libraryColumns";
@@ -472,6 +473,7 @@ export function sortAndFilterBooks(
       // This is an exclusion, not a whitelist: retain unset and future statuses.
       if (prefs.filterStatus === "unfinished") return ud?.status !== "finished";
       const status = ud?.status || "not_started";
+      if (prefs.filterStatus === "zero_progress") return hasZeroProgress(status, positions[b.filePath]);
       return status === prefs.filterStatus;
     });
   }

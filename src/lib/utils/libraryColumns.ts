@@ -48,6 +48,13 @@ export function libraryProgress(book: BookMeta, status: BookStatus, position?: L
   return Math.round(Math.max(0, progressPercent(elapsed, duration)));
 }
 
+/** Actual saved start, not a rounded percentage or a manually assigned New status. */
+export function hasZeroProgress(status: BookStatus, position?: LibraryPosition): boolean {
+  if (status === "finished") return false;
+  if (!position) return true;
+  return position.position === 0 && (position.trackIndex ?? 0) === 0;
+}
+
 export function lastPlayedTime(position?: LibraryPosition): number | null {
   const timestamp = Date.parse(position?.lastPlayed ?? "");
   return Number.isFinite(timestamp) ? timestamp : null;

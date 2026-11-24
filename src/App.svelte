@@ -210,7 +210,7 @@
     }
     miniReady = false;
     const mini = new WebviewWindow("mini-player", {
-      url: "/mini-player.html", title: "ABPlayer Fork Mini", width: MINI_WIDTH, height: MINI_HEIGHT,
+      url: "/mini-player.html", title: "ABPlayer-Enhanced Mini", width: MINI_WIDTH, height: MINI_HEIGHT,
       resizable: false, alwaysOnTop: true, decorations: false, transparent: true, shadow: false, skipTaskbar: true,
       visible: false,
     });
@@ -293,11 +293,11 @@
         lastTitlePct = pct;
         const userData = $userdataStore.books[book.filePath];
         const name = getDisplayTitle(book, userData);
-        getCurrentWindow().setTitle(`${name} \u2014 ${pct}% | ABPlayer Fork`);
+        getCurrentWindow().setTitle(`${name} \u2014 ${pct}% | ABPlayer-Enhanced`);
       }
     } else if (lastTitlePct !== -1) {
       lastTitlePct = -1;
-      getCurrentWindow().setTitle("ABPlayer Fork");
+      getCurrentWindow().setTitle("ABPlayer-Enhanced");
     }
   });
 </script>

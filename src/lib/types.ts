@@ -171,7 +171,7 @@ export type SortBy =
   | "title" | "author" | "duration" | "status" | "progress" | "series"
   | "narrator" | "publishYear" | "audioPublishYear" | "genre" | "recent";
 export type SortDirection = "asc" | "desc";
-export type FilterStatus = "all" | "unfinished" | BookStatus;
+export type FilterStatus = "all" | "unfinished" | "zero_progress" | BookStatus;
 
 export type AppTheme = "light" | "dark";
 export type AppView = "library" | "player" | "tiers";

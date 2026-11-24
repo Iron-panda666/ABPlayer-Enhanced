@@ -11,7 +11,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{App, Manager, State, WebviewWindow};
 use tauri_plugin_store::StoreExt;
 
-const FORMAT: &str = "ABPlayer Fork profile";
+const FORMAT: &str = "ABPlayer Fork profile"; // Stable archive identity: old backups remain restorable.
 const VERSION: u32 = 1;
 const AUTOMATIC_BACKUPS_TO_KEEP: usize = 3;
 const STORES: [&str; 6] = [
@@ -118,7 +118,7 @@ pub(crate) fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
                 });
             }
             Err(TryLockError::WouldBlock) => {
-                startup_notice = Some("Restore is pending. Quit all ABPlayer Fork windows and reopen the app.".into());
+                startup_notice = Some("Restore is pending. Quit all ABPlayer-Enhanced windows and reopen the app.".into());
             }
             Err(TryLockError::Error(e)) => return Err(e.into()),
         }
@@ -237,7 +237,7 @@ pub(crate) fn create_before_update_backup(profile: &Path, target_version: &str) 
         .open(sibling(profile, ".restore-lock")).map_err(error)?;
     match lock.try_lock() {
         Ok(()) => (),
-        Err(TryLockError::WouldBlock) => return Err("Quit all ABPlayer Fork windows before updating".into()),
+        Err(TryLockError::WouldBlock) => return Err("Quit all ABPlayer-Enhanced windows before updating".into()),
         Err(TryLockError::Error(e)) => return Err(error(e)),
     }
     let mut stores = BTreeMap::new();
@@ -289,7 +289,7 @@ impl Backup {
             self.stores.len() != STORES.len() ||
             STORES.iter().any(|name| !self.stores.get(*name).is_some_and(Value::is_object)) ||
             self.covers.keys().any(|name| !cover_name(name)) {
-            return Err("This file is not a supported ABPlayer Fork backup".into());
+            return Err("This file is not a supported ABPlayer-Enhanced backup".into());
         }
         let library = &self.stores["library.json"];
         if let Some(index) = library.get("library") {
@@ -325,7 +325,7 @@ pub(crate) async fn inspect_profile_backup(
 ) -> Result<Preview, String> {
     main_window(&window)?;
     let backup: Backup = serde_json::from_reader(BufReader::new(File::open(path).map_err(error)?))
-        .map_err(|_| "This file is not a readable ABPlayer Fork backup".to_owned())?;
+        .map_err(|_| "This file is not a readable ABPlayer-Enhanced backup".to_owned())?;
     let preview = backup.preview()?;
     *state.preview.lock().map_err(error)? = Some(backup);
     Ok(preview)
