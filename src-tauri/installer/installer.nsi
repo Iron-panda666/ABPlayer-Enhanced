@@ -662,6 +662,31 @@ Section Install
 
   Call ForkRequireClosed
 
+  ; Run the NEW application's headless backup command from the temporary directory.
+  ; Older installed versions do not have this command. No installed files are
+  ; replaced until the archive has been flushed, read back and validated.
+  ${If} ${FileExists} "$APPDATA\${BUNDLEID}\."
+    InitPluginsDir
+    SetOutPath "$PLUGINSDIR\profile-backup"
+    File "${MAINBINARYSRCPATH}"
+    {{#each resources_dirs}}
+      CreateDirectory "$OUTDIR\\{{this}}"
+    {{/each}}
+    {{#each resources}}
+      File /a "/oname={{this.[1]}}" "{{no-escape @key}}"
+    {{/each}}
+    ClearErrors
+    StrCpy $0 -1
+    ExecWait '$\"$PLUGINSDIR\profile-backup\${MAINBINARYNAME}.exe$\" --backup-before-update $\"$APPDATA\${BUNDLEID}$\"' $0
+    ${If} ${Errors}
+    ${OrIf} $0 <> 0
+      Call ForkBackupFailed
+    ${EndIf}
+    SetOutPath $INSTDIR
+    Call ForkRequireClosed
+    DetailPrint "Automatic profile backup verified: $APPDATA\${BUNDLEID}-backups"
+  ${EndIf}
+
   ; Copy main executable
   File "${MAINBINARYSRCPATH}"
 

@@ -1,6 +1,6 @@
 [package]
 name = "abplayer"
-version = "1.7.5"
+version = "1.7.6"
 description = "Desktop Audiobook Player"
 authors = ["jhidalgo_dev"]
 edition = "2021"

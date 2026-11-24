@@ -23,6 +23,7 @@ An ABPlayer fork with a tray mini player, configurable library columns, playback
 | Stream Deck hotkeys | Assign global keyboard shortcuts for playback, volume, mute and bookmarks. |
 | Full profile backups | Extends the original library export/import with a full profile archive: library, listening positions, bookmarks, covers, settings, tier lists and statistics. Remap audiobook folders when restoring on another PC. |
 | Installer maintenance | Update an existing Fork installation in place, repair installed files or uninstall. Updates and repairs preserve the profile. |
+| Automatic pre-update backups | Setup verifies a profile backup before replacing program files and keeps the last 3 automatic archives. Manual backups are not automatically deleted. |
 
 ## A closer look
 
@@ -68,7 +69,9 @@ Run the newer Fork installer to update an existing **ABPlayer Fork** installatio
 
 The library, listening positions, bookmarks, covers and settings live separately in `%APPDATA%\com.ironpanda666.abplayer` and are preserved by updates and repair. Uninstall has a separate option to delete application data.
 
-Before updating, use **Library → … → Backup and restore** to create a full profile backup. This is a manual step; the update installer does not automatically create a full backup. Audiobook audio files are not included in the profile archive. Restoring an archive keeps the previous profile as a safety copy.
+From **1.7.6**, setup automatically creates and verifies a full backup of an existing Fork profile **before replacing program files**, including during repair. A failed backup stops the update. Archives are stored in `%APPDATA%\com.ironpanda666.abplayer-backups`; the newest **3 automatic backups** are retained after a successful new snapshot. Manual backups are not automatically deleted. These archives stay outside the profile and survive normal uninstall/profile cleanup.
+
+Use **Library → … → Backup and restore** for an additional manual backup or to restore an automatic archive. The dialog shows the automatic backup location. Audiobook audio files are not included in profile archives. Restoring an archive keeps the previous profile as a safety copy.
 
 There is currently no in-app update checker or automatic download. Upgrading the original ABPlayer to the Fork is a separate first installation with an optional original-profile copy; it is not an in-place update of the original application.
 
@@ -87,9 +90,9 @@ The installed app is named **ABPlayer Fork**. Its Windows profile is stored in `
 
 ## Project status
 
-See the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md), the [1.7.4 book editing fixes](docs/releases/1.7.4-enhanced.md) and the [1.7.5 Unfinished filter](docs/releases/1.7.5-enhanced.md). Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
+See the complete [Changelog](CHANGELOG.md), the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) and the [1.7.6 automatic backup notes](docs/releases/1.7.6-enhanced.md). Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
 
-The Windows build is version **1.7.5**. The frontend suite has 192 passing tests. Standalone backup tests cover folder relocation and preservation of the previous profile. The complete native test suite encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
+The Windows build is version **1.7.6**. The frontend suite has 192 passing tests. Nine standalone native backup tests cover archive restoration, relocation, profile locking, backup failures and retention without deleting manual archives. The complete native test suite previously encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
 
 Open Library receives the query when you select **Search**. Imported catalog fields are stored in the player's library.
 

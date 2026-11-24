@@ -23,12 +23,14 @@
   let pending = $state(false);
   let notice = $state("");
   let failure = $state("");
+  let automaticBackupFolder = $state<string | null>(null);
 
   onMount(() => {
     void run(async () => {
-      const status = await invoke<{ pending: boolean; startupNotice: string | null }>("profile_restore_status");
+      const status = await invoke<{ pending: boolean; startupNotice: string | null; automaticBackupFolder: string | null }>("profile_restore_status");
       pending = status.pending;
       notice = status.startupNotice ?? "";
+      automaticBackupFolder = status.automaticBackupFolder ?? null;
     });
   });
 
@@ -60,7 +62,8 @@
 
   function chooseBackup() {
     void run(async () => {
-      const path = await open({ title: "Choose an ABPlayer backup", multiple: false, filters });
+      const path = await open({ title: "Choose an ABPlayer backup", multiple: false, filters,
+        defaultPath: automaticBackupFolder ?? undefined });
       if (typeof path !== "string") return;
       preview = await invoke<Preview>("inspect_profile_backup", { path });
       mappings = {};
@@ -106,6 +109,9 @@
   <div class="backup-dialog">
     <h2>Backup and restore</h2>
     <p>Back up your library, listening positions, bookmarks, covers and settings in one file. Keep your audio files in their own folders.</p>
+    {#if automaticBackupFolder}
+      <p>Setup keeps the last 3 automatic profile backups here: <span class="backup-path">{automaticBackupFolder}</span>. Manual backups are kept separately and are not automatically deleted. Choose a backup below to restore it.</p>
+    {/if}
     {#if notice}<p class="feedback" role="status">{notice}</p>{/if}
     {#if failure}<p class="failure" role="alert">{failure}</p>{/if}
     {#if pending}
@@ -159,6 +165,7 @@
 </Modal>
 
 <style>
+  .backup-path { overflow-wrap: anywhere; font-family: var(--font-mono); }
   .backup-dialog { display: grid; gap: 0.9rem; }
   h2, h3, p, ul { margin: 0; }
   h2 { font: 600 1.45rem/1.15 var(--font-headline); }

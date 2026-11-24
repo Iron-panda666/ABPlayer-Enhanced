@@ -13,6 +13,7 @@ use tauri_plugin_store::StoreExt;
 
 const FORMAT: &str = "ABPlayer Fork profile";
 const VERSION: u32 = 1;
+const AUTOMATIC_BACKUPS_TO_KEEP: usize = 3;
 const STORES: [&str; 6] = [
     "library.json",
     "positions.json",
@@ -31,6 +32,8 @@ struct Backup {
     cover_folder: String,
     stores: BTreeMap<String, Value>,
     covers: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    automatic_update_version: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -60,6 +63,7 @@ pub(crate) struct BackupState {
 pub(crate) struct RestoreStatus {
     pending: bool,
     startup_notice: Option<String>,
+    automatic_backup_folder: Option<String>,
 }
 
 fn sibling(path: &Path, suffix: &str) -> PathBuf {
@@ -150,6 +154,116 @@ fn cover_name(name: &str) -> bool {
         && matches!(ext, "jpg" | "png" | "webp")
 }
 
+fn collect_covers(profile: &Path) -> Result<BTreeMap<String, String>, String> {
+    let folder = profile.join("covers");
+    let mut covers = BTreeMap::new();
+    if folder.is_dir() {
+        for entry in fs::read_dir(folder).map_err(error)? {
+            let entry = entry.map_err(error)?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if cover_name(&name) && entry.file_type().map_err(error)?.is_file() {
+                covers.insert(name, STANDARD.encode(fs::read(entry.path()).map_err(error)?));
+            }
+        }
+    }
+    Ok(covers)
+}
+
+fn publish_archive(path: &Path, backup: &Backup) -> Result<(), String> {
+    backup.preview()?;
+    let temporary = sibling(path, &unique_suffix("writing"));
+    let result = write_json(&temporary, backup).and_then(|()| {
+        // Read the flushed archive back through the same validation used by Restore.
+        let verified: Backup = serde_json::from_reader(BufReader::new(File::open(&temporary).map_err(error)?))
+            .map_err(error)?;
+        verified.preview()?;
+        fs::rename(&temporary, path).map_err(error)
+    });
+    if result.is_err() { let _ = fs::remove_file(&temporary); }
+    result
+}
+
+fn utc_timestamp(time: SystemTime) -> Result<String, String> {
+    let elapsed = time.duration_since(UNIX_EPOCH).map_err(error)?;
+    let mut days = elapsed.as_secs() / 86_400;
+    let mut year = 1970u32;
+    let leap = |year: u32| year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    loop {
+        let length = if leap(year) { 366 } else { 365 };
+        if days < length { break; }
+        days -= length;
+        year += 1;
+        if year > 9999 { return Err("The system clock is outside the supported range".into()); }
+    }
+    let lengths = [31, if leap(year) { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut month = 0;
+    while days >= lengths[month] { days -= lengths[month]; month += 1; }
+    let seconds = elapsed.as_secs() % 86_400;
+    Ok(format!("{year:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+        month + 1, days + 1, seconds / 3600, seconds / 60 % 60, seconds % 60, elapsed.subsec_millis()))
+}
+
+fn prune_automatic_backups(folder: &Path, newest: &Path) -> io::Result<()> {
+    let mut previous = Vec::new();
+    for entry in fs::read_dir(folder)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if path == newest || !entry.file_type()?.is_file()
+            || !name.starts_with("ABPlayer-before-update-to-") || !name.contains(".snapshot-")
+            || path.extension().and_then(|s| s.to_str()) != Some("abplayer-backup") { continue; }
+        // The name AND archive marker must identify a verified automatic backup.
+        // Hand-created archives and unrelated files are never retention candidates.
+        let Ok(file) = File::open(&path) else { continue; };
+        let Ok(backup) = serde_json::from_reader::<_, Backup>(BufReader::new(file)) else { continue; };
+        if backup.automatic_update_version.is_none() || backup.preview().is_err() { continue; }
+        previous.push((entry.metadata()?.modified()?, path));
+    }
+    previous.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| b.1.cmp(&a.1)));
+    for (_, path) in previous.into_iter().skip(AUTOMATIC_BACKUPS_TO_KEEP - 1) {
+        // Only direct, regular archive files read above; never recurse into a folder.
+        fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+/// Installer-only, before the new app is copied into place. Does not initialize Tauri or WebView.
+pub(crate) fn create_before_update_backup(profile: &Path, target_version: &str) -> Result<Option<PathBuf>, String> {
+    if !profile.is_absolute() { return Err("The profile path must be absolute".into()); }
+    if !profile.try_exists().map_err(error)? { return Ok(None); }
+    if !profile.is_dir() { return Err("The profile is not a directory".into()); }
+    // The running app holds a shared lock. Refuse a snapshot while it can still write.
+    let lock = OpenOptions::new().create(true).truncate(false).read(true).write(true)
+        .open(sibling(profile, ".restore-lock")).map_err(error)?;
+    match lock.try_lock() {
+        Ok(()) => (),
+        Err(TryLockError::WouldBlock) => return Err("Quit all ABPlayer Fork windows before updating".into()),
+        Err(TryLockError::Error(e)) => return Err(error(e)),
+    }
+    let mut stores = BTreeMap::new();
+    for name in STORES {
+        let path = profile.join(name);
+        let data = if path.try_exists().map_err(error)? {
+            serde_json::from_reader(BufReader::new(File::open(path).map_err(error)?))
+                .map_err(|e| format!("Could not read {name}: {e}"))?
+        } else { Value::Object(Map::new()) };
+        stores.insert(name.to_owned(), data);
+    }
+    let backup = Backup { format: FORMAT.into(), version: VERSION, created_at: utc_timestamp(SystemTime::now())?,
+        cover_folder: profile.join("covers").to_string_lossy().into_owned(), stores, covers: collect_covers(profile)?,
+        automatic_update_version: Some(target_version.to_owned()) };
+    backup.preview()?;
+    let folder = sibling(profile, "-backups");
+    fs::create_dir_all(&folder).map_err(error)?;
+    let safe_version: String = target_version.chars().filter(|c| c.is_ascii_alphanumeric() || *c == '.' || *c == '-').collect();
+    let path = folder.join(format!("ABPlayer-before-update-to-{safe_version}{}.abplayer-backup", unique_suffix("snapshot")));
+    publish_archive(&path, &backup)?;
+    // Retention starts only after the new archive has been flushed and verified.
+    // A locked old backup is left in place; it must not invalidate the new snapshot.
+    if let Err(e) = prune_automatic_backups(&folder, &path) { eprintln!("Could not prune older automatic backups: {e}"); }
+    Ok(Some(path))
+}
+
 #[tauri::command]
 pub(crate) async fn create_profile_backup(
     window: WebviewWindow, state: State<'_, BackupState>, path: PathBuf, created_at: String,
@@ -163,25 +277,10 @@ pub(crate) async fn create_profile_backup(
         let store = window.store(name).map_err(error)?;
         stores.insert(name.to_owned(), Value::Object(store.entries().into_iter().collect()));
     }
-    let cover_folder = state.profile.join("covers");
-    let mut covers = BTreeMap::new();
-    if cover_folder.is_dir() {
-        for entry in fs::read_dir(&cover_folder).map_err(error)? {
-            let entry = entry.map_err(error)?;
-            let name = entry.file_name().to_string_lossy().into_owned();
-            if cover_name(&name) && entry.file_type().map_err(error)?.is_file() {
-                covers.insert(name, STANDARD.encode(fs::read(entry.path()).map_err(error)?));
-            }
-        }
-    }
     let backup = Backup { format: FORMAT.into(), version: VERSION, created_at,
-        cover_folder: cover_folder.to_string_lossy().into_owned(), stores, covers };
-    let temporary = sibling(&path, &unique_suffix("writing"));
-    let result = write_json(&temporary, &backup).and_then(|()| fs::rename(&temporary, &path).map_err(error));
-    if result.is_err() {
-        let _ = fs::remove_file(&temporary);
-    }
-    result
+        cover_folder: state.profile.join("covers").to_string_lossy().into_owned(), stores, covers: collect_covers(&state.profile)?,
+        automatic_update_version: None };
+    publish_archive(&path, &backup)
 }
 
 impl Backup {
@@ -420,7 +519,9 @@ pub(crate) async fn schedule_profile_restore(
 pub(crate) async fn profile_restore_status(window: WebviewWindow, state: State<'_, BackupState>) -> Result<RestoreStatus, String> {
     main_window(&window)?;
     Ok(RestoreStatus { pending: pending_path(&state.profile).try_exists().map_err(error)?,
-        startup_notice: state.startup_notice.clone() })
+        startup_notice: state.startup_notice.clone(),
+        automatic_backup_folder: sibling(&state.profile, "-backups").is_dir()
+            .then(|| sibling(&state.profile, "-backups").to_string_lossy().into_owned()) })
 }
 
 #[tauri::command]
@@ -478,11 +579,127 @@ mod tests {
             format: FORMAT.into(), version: VERSION, created_at: "2026-01-01T00:00:00Z".into(),
             cover_folder: cover_folder.into(), stores,
             covers: [("mystery.png".into(), STANDARD.encode(b"cover"))].into_iter().collect(),
+            automatic_update_version: None,
         }
     }
 
     fn read_json(path: PathBuf) -> Value {
         serde_json::from_reader(BufReader::new(File::open(path).unwrap())).unwrap()
+    }
+
+    fn write_sample_profile(profile: &Path) -> Backup {
+        let mut sample = sample_backup();
+        fs::create_dir_all(profile.join("covers")).unwrap();
+        let cover = format!("http://asset.localhost/{}",
+            utf8_percent_encode(profile.join("covers/mystery.png").to_str().unwrap(), NON_ALPHANUMERIC));
+        sample.stores.get_mut("library.json").unwrap()["library"]["books"][0]["coverArt"] = Value::String(cover.clone());
+        let key = r"group:auto:D:\Books::mystery";
+        sample.stores.get_mut("userdata.json").unwrap()["books"][key]["coverArtOverride"] = Value::String(cover);
+        for (name, value) in &sample.stores { write_json(&profile.join(name), value).unwrap(); }
+        fs::write(profile.join("covers/mystery.png"), b"cover").unwrap();
+        sample
+    }
+
+    #[test]
+    fn automatic_backup_is_restorable_and_never_overwrites_previous_backups() {
+        let temp = TempDir::new();
+        let profile = temp.0.join("profile with spaces č");
+        let sample = write_sample_profile(&profile);
+        let original: Vec<_> = STORES.iter().map(|name| (*name, fs::read(profile.join(name)).unwrap())).collect();
+        let archive = create_before_update_backup(&profile, "1.7.6").unwrap().unwrap();
+        let archived_bytes = fs::read(&archive).unwrap();
+        let backup: Backup = serde_json::from_slice(&archived_bytes).unwrap();
+        assert_eq!((backup.preview().unwrap().books, backup.preview().unwrap().bookmarks), (1, 1));
+        assert_eq!(backup.stores, sample.stores);
+        assert_eq!(backup.covers, sample.covers);
+        for (name, bytes) in original { assert_eq!(fs::read(profile.join(name)).unwrap(), bytes); }
+        assert_eq!(fs::read(profile.join("covers/mystery.png")).unwrap(), b"cover");
+        let second = create_before_update_backup(&profile, "1.7.6").unwrap().unwrap();
+        assert_ne!(archive, second);
+        assert_eq!(fs::read(&archive).unwrap(), archived_bytes);
+        let restored = temp.0.join("restored");
+        stage_backup(&backup, &restored, vec![]).unwrap();
+        publish_restore(&restored).unwrap();
+        assert_eq!(read_json(restored.join("positions.json")), sample.stores["positions.json"]);
+        assert_eq!(fs::read(restored.join("covers/mystery.png")).unwrap(), b"cover");
+    }
+
+    #[test]
+    fn fresh_install_does_not_create_an_empty_backup_or_profile() {
+        let temp = TempDir::new();
+        let profile = temp.0.join("not-created");
+        assert!(create_before_update_backup(&profile, "1.7.6").unwrap().is_none());
+        assert!(!profile.exists());
+        assert!(!sibling(&profile, "-backups").exists());
+    }
+
+    #[test]
+    fn automatic_backup_refuses_a_profile_still_used_by_the_player() {
+        let temp = TempDir::new();
+        let profile = temp.0.join("profile");
+        write_sample_profile(&profile);
+        let lock = OpenOptions::new().create(true).truncate(false).read(true).write(true)
+            .open(sibling(&profile, ".restore-lock")).unwrap();
+        lock.lock_shared().unwrap();
+        assert!(create_before_update_backup(&profile, "1.7.6").unwrap_err().contains("Quit all"));
+        assert!(!sibling(&profile, "-backups").exists());
+        lock.unlock().unwrap();
+        assert!(create_before_update_backup(&profile, "1.7.6").unwrap().is_some());
+    }
+
+    #[test]
+    fn corrupt_profile_stops_backup_without_changing_the_source() {
+        let temp = TempDir::new();
+        let profile = temp.0.join("profile");
+        write_sample_profile(&profile);
+        fs::write(profile.join("positions.json"), b"{not-json").unwrap();
+        assert!(create_before_update_backup(&profile, "1.7.6").is_err());
+        assert_eq!(fs::read(profile.join("positions.json")).unwrap(), b"{not-json");
+        assert!(!sibling(&profile, "-backups").exists());
+    }
+
+    #[test]
+    fn unavailable_backup_destination_stops_backup_without_changing_the_source() {
+        let temp = TempDir::new();
+        let profile = temp.0.join("profile");
+        let sample = write_sample_profile(&profile);
+        fs::write(sibling(&profile, "-backups"), b"existing file").unwrap();
+        assert!(create_before_update_backup(&profile, "1.7.6").is_err());
+        assert_eq!(read_json(profile.join("userdata.json")), sample.stores["userdata.json"]);
+        assert_eq!(fs::read(sibling(&profile, "-backups")).unwrap(), b"existing file");
+    }
+
+    #[test]
+    fn automatic_backup_timestamp_uses_utc_including_leap_days() {
+        use std::time::Duration;
+        assert_eq!(utc_timestamp(UNIX_EPOCH).unwrap(), "1970-01-01T00:00:00.000Z");
+        assert_eq!(utc_timestamp(UNIX_EPOCH + Duration::from_secs(951_782_400)).unwrap(), "2000-02-29T00:00:00.000Z");
+        assert_eq!(utc_timestamp(UNIX_EPOCH + Duration::from_millis(1_709_164_800_123)).unwrap(), "2024-02-29T00:00:00.123Z");
+    }
+
+    #[test]
+    fn retention_keeps_three_automatic_archives_and_all_manual_archives() {
+        let temp = TempDir::new();
+        let profile = temp.0.join("profile");
+        let sample = write_sample_profile(&profile);
+        let folder = sibling(&profile, "-backups");
+        fs::create_dir(&folder).unwrap();
+        let manual = folder.join("ABPlayer-before-update-to-manual.snapshot-keep.abplayer-backup");
+        write_json(&manual, &sample).unwrap();
+        let mut archives = Vec::new();
+        for version in ["1.7.6", "1.7.7", "1.7.8", "1.7.9", "1.8.0"] {
+            archives.push(create_before_update_backup(&profile, version).unwrap().unwrap());
+        }
+        assert!(!archives[0].exists());
+        assert!(!archives[1].exists());
+        assert!(archives[2..].iter().all(|path| path.is_file()));
+        assert!(manual.is_file());
+        assert_eq!(fs::read_dir(&folder).unwrap().count(), 4);
+        // A failed snapshot never prunes the three known-good archives.
+        fs::write(profile.join("userdata.json"), b"invalid").unwrap();
+        assert!(create_before_update_backup(&profile, "1.8.1").is_err());
+        assert!(archives[2..].iter().all(|path| path.is_file()));
+        assert!(manual.is_file());
     }
 
     #[test]

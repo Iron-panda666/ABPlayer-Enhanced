@@ -33,7 +33,7 @@ Function ForkUpdatePage
   nsDialogs::Create 1018
   Pop $0
   ${IfThen} $0 == error ${|} Abort ${|}
-  ${NSD_CreateLabel} 0 0 100% 50u "Setup will update the program files in the existing installation. Your library, listening progress, bookmarks and settings will be kept."
+  ${NSD_CreateLabel} 0 0 100% 70u "Setup will back up the existing profile before updating program files. Your library, listening progress, bookmarks and settings will be kept.$\r$\n$\r$\nAutomatic backups: $APPDATA\${BUNDLEID}-backups"
   Pop $0
   nsDialogs::Show
 FunctionEnd
@@ -76,6 +76,15 @@ FunctionEnd
 
 Function un.ForkRequireClosed
   !insertmacro ForkRequireClosedBody "un."
+FunctionEnd
+
+Function ForkBackupFailed
+  DetailPrint "Automatic profile backup failed. Program files were not replaced."
+  IfSilent no_backup_dialog
+    MessageBox MB_OK|MB_ICONSTOP "Setup could not create and verify the profile backup. No program files were updated.$\r$\n$\r$\nQuit ABPlayer Fork and check available disk space and write access to:$\r$\n$APPDATA\${BUNDLEID}-backups$\r$\n$\r$\nThen run setup again."
+  no_backup_dialog:
+  SetErrorLevel 4
+  Abort
 FunctionEnd
 
 Function ForkWaitForProcess

@@ -10,6 +10,11 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 mod profile_backup;
 
+/// Used by the installer without opening the player or loading its profile stores.
+pub fn backup_before_update(profile: &std::path::Path) -> Result<(), String> {
+    profile_backup::create_before_update_backup(profile, env!("CARGO_PKG_VERSION")).map(|_| ())
+}
+
 /// Maximum allocation size for chapter data from untrusted files (16 MB).
 const MAX_CHAPTER_ALLOC: usize = 16 * 1024 * 1024;
 
