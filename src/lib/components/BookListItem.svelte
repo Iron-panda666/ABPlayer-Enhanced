@@ -4,7 +4,7 @@
   import type { BookMeta, BookStatus, UserBookData, Collection, SortBy } from "../types";
   import { formatTime } from "../utils/format";
   import { DEFAULT_LIBRARY_COLUMNS, lastPlayedTime, libraryProgress, type LibraryPosition } from "../utils/libraryColumns";
-  import { getDisplayTitle, getDisplayAuthor, getDisplayCover } from "../stores/userdataStore";
+  import { getDisplayTitle, getDisplayAuthor, getDisplayCover, getDisplayDuration } from "../stores/userdataStore";
   import StatusBadge from "./StatusBadge.svelte";
   import CollectionTag from "./CollectionTag.svelte";
   import BookMenu from "./library/BookMenu.svelte";
@@ -37,6 +37,7 @@
   let title = $derived(getDisplayTitle(book, userData));
   let author = $derived(getDisplayAuthor(book, userData));
   let cover = $derived(getDisplayCover(book, userData));
+  let duration = $derived(getDisplayDuration(book, userData));
   let status = $derived(userData?.status || "not_started");
   let progress = $derived(libraryProgress(book, status, position));
   let bookCollections = $derived(
@@ -58,11 +59,12 @@
   function columnText(column: SortBy): string | null {
     switch (column) {
       case "author": return author;
-      case "duration": return book.duration > 0 ? formatTime(book.duration) : null;
+      case "duration": return duration > 0 ? formatTime(duration) : null;
       case "progress": return `${progress}%`;
       case "series": return seriesLabel;
       case "narrator": return userData?.narrator || null;
       case "publishYear": return userData?.publishYear == null ? null : String(userData.publishYear);
+      case "audioPublishYear": return userData?.audioPublishYear == null ? null : String(userData.audioPublishYear);
       case "genre": return userData?.genre || null;
       case "recent": {
         const timestamp = lastPlayedTime(position);

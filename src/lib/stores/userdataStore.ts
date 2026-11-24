@@ -98,6 +98,7 @@ export function defaultUserBookData(): UserBookData {
     titleOverride: null,
     authorOverride: null,
     coverArtOverride: null,
+    durationOverride: null,
     collections: [],
     status: "not_started",
     genre: null,
@@ -113,6 +114,7 @@ export function defaultUserBookData(): UserBookData {
     tags: [],
     yearRead: null,
     publishYear: null,
+    audioPublishYear: null,
     source: null,
     axes: {},
     axisLabels: null,
@@ -126,6 +128,10 @@ export function normalizeUserBookData(raw: Partial<UserBookData> | undefined | n
   return {
     ...base,
     ...raw,
+    audioPublishYear: typeof raw.audioPublishYear === "number" && Number.isInteger(raw.audioPublishYear)
+      && raw.audioPublishYear >= 1000 && raw.audioPublishYear <= 3000 ? raw.audioPublishYear : null,
+    durationOverride: typeof raw.durationOverride === "number" && Number.isFinite(raw.durationOverride)
+      && raw.durationOverride >= 0 && raw.durationOverride <= 36_000_000 ? raw.durationOverride : null,
     collections: Array.isArray(raw.collections) ? raw.collections : base.collections,
     quotes: Array.isArray(raw.quotes) ? raw.quotes : base.quotes,
     tags: Array.isArray(raw.tags) ? raw.tags : base.tags,
@@ -213,15 +219,17 @@ export async function loadUserData(): Promise<void> {
   }
 }
 
-async function persist(): Promise<void> {
+async function persist(flush = false): Promise<void> {
   try {
     const data = get(userdataStore);
     const s = await getStore(STORE_FILE);
     await s.set("books", data.books);
     await s.set("collections", data.collections);
     await s.set("preferences", data.preferences);
+    if (flush) await s.save();
   } catch (e) {
     console.warn("Failed to persist user data:", e);
+    if (flush) throw e;
   }
 }
 
@@ -246,7 +254,7 @@ export async function setUserBookData(
       },
     };
   });
-  await persist();
+  await persist(true);
 }
 
 /**
@@ -312,7 +320,7 @@ export async function resetUserBookData(filePath: string): Promise<void> {
     const { [filePath]: _, ...rest } = s.books;
     return { ...s, books: rest };
   });
-  await persist();
+  await persist(true);
 }
 
 export async function setBookStatus(
@@ -337,6 +345,13 @@ export async function markInProgressIfNew(filePath: string): Promise<void> {
 }
 
 // ---- Display Helpers ----
+
+/** Catalog length only. Playback and saved positions always use the audio duration. */
+export function getDisplayDuration(book: BookMeta, userData?: UserBookData): number {
+  const value = userData?.durationOverride;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 36_000_000
+    ? value : book.duration;
+}
 
 export function getDisplayTitle(book: BookMeta, userData?: UserBookData): string {
   return userData?.titleOverride || book.title;
@@ -471,13 +486,14 @@ export function sortAndFilterBooks(
     switch (prefs.sortBy) {
       case "title": return getDisplayTitle(book, ud);
       case "author": return getDisplayAuthor(book, ud);
-      case "duration": return book.duration > 0 ? book.duration : null;
+      case "duration": return getDisplayDuration(book, ud) || null;
       case "status": return STATUS_ORDER[ud?.status ?? "not_started"];
       case "progress": return libraryProgress(book, ud?.status ?? "not_started", positions[book.filePath]);
       case "series": return ud?.series?.trim() || null;
       case "narrator": return ud?.narrator?.trim() || null;
       case "genre": return ud?.genre?.trim() || null;
       case "publishYear": return ud?.publishYear ?? null;
+      case "audioPublishYear": return ud?.audioPublishYear ?? null;
       case "recent": return lastPlayedTime(positions[book.filePath]);
     }
   }

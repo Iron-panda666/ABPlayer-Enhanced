@@ -18,8 +18,9 @@ An ABPlayer fork with a tray mini player, configurable library columns, playback
 | Audio visualizations | Choose a spectrum, an oscilloscope, a level meter or Off in **Settings → Audio**. |
 | Library columns | Add, hide and rearrange optional columns. Click a heading to sort and click it again to reverse the direction. |
 | Metadata lookup | Search Open Library by title, author or ISBN and review the fields before saving them. |
+| Book editing | Keep unsaved edits until you save or explicitly discard them. Store the original book year and audiobook release year separately, and enter library length as H:MM:SS or decimal hours. |
 | Stream Deck hotkeys | Assign global keyboard shortcuts for playback, volume, mute and bookmarks. |
-| Full profile backups | Save the library, listening positions, bookmarks, covers, settings, tier lists and statistics in one file. Remap audiobook folders when restoring on another PC. |
+| Full profile backups | Extends the original library export/import with a full profile archive: library, listening positions, bookmarks, covers, settings, tier lists and statistics. Remap audiobook folders when restoring on another PC. |
 | Installer maintenance | Update an existing Fork installation in place, repair installed files or uninstall. Updates and repairs preserve the profile. |
 
 ## A closer look
@@ -38,7 +39,7 @@ An ABPlayer fork with a tray mini player, configurable library columns, playback
 
 The chosen columns, their order and the sort direction are saved between sessions.
 
-### Backup and restore
+### Full profile backup and restore
 
 ![Backup and restore in the running application](docs/screenshots/backup-restore.jpg)
 
@@ -75,7 +76,9 @@ The installed app is named **ABPlayer Fork**. Its Windows profile is stored in `
 
 ## Project status
 
-The Windows build is version **1.7.3**. The frontend suite has 165 passing tests. Standalone backup tests cover folder relocation and preservation of the previous profile. The complete native test suite encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
+See the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) for the measured scope of the changes and the [1.7.4 release notes](docs/releases/1.7.4-enhanced.md) for book editing fixes. Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
+
+The Windows build is version **1.7.4**. The frontend suite has 186 passing tests. Standalone backup tests cover folder relocation and preservation of the previous profile. The complete native test suite encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
 
 Open Library receives the query when you select **Search**. Imported catalog fields are stored in the player's library.
 

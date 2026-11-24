@@ -1,7 +1,7 @@
 {
   "name": "abplayer",
   "private": true,
-  "version": "1.7.3",
+  "version": "1.7.4",
   "type": "module",
   "scripts": {
     "dev": "vite",

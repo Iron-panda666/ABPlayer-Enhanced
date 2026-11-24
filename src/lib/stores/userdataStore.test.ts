@@ -37,6 +37,13 @@ function emptyLibrary(): void {
 }
 
 describe("normalizeUserBookData", () => {
+  it("keeps audiobook years independent and rejects invalid display durations", () => {
+    expect(normalizeUserBookData({ publishYear: 2011, audioPublishYear: 2018, durationOverride: 45_000 }))
+      .toMatchObject({ publishYear: 2011, audioPublishYear: 2018, durationOverride: 45_000 });
+    expect(normalizeUserBookData({ publishYear: 2011 }).audioPublishYear).toBeNull();
+    expect(normalizeUserBookData({ audioPublishYear: 16, durationOverride: Infinity }))
+      .toMatchObject({ audioPublishYear: null, durationOverride: null });
+  });
   it("back-fills every field from defaults when given nothing", () => {
     const d = normalizeUserBookData(undefined);
 

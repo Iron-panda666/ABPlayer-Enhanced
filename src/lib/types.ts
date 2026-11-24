@@ -103,6 +103,8 @@ export interface UserBookData {
   titleOverride: string | null;
   authorOverride: string | null;
   coverArtOverride: string | null;
+  /** Catalog/display length in seconds; never replaces the actual playback duration. */
+  durationOverride?: number | null;
   collections: string[]; // collection IDs
   status: BookStatus;
   genre: string | null;
@@ -118,7 +120,10 @@ export interface UserBookData {
   quotes: string[];
   tags: string[];
   yearRead: number | null;
+  /** First publication year of the original book, not the audio edition. */
   publishYear: number | null;
+  /** Release year of this particular audiobook edition, when known. */
+  audioPublishYear?: number | null;
   source: BookSource;
   /** Per-book axis scores, keyed by axis label. 0-10 integers. */
   axes: Record<string, number>;
@@ -164,7 +169,7 @@ export interface TierList {
 
 export type SortBy =
   | "title" | "author" | "duration" | "status" | "progress" | "series"
-  | "narrator" | "publishYear" | "genre" | "recent";
+  | "narrator" | "publishYear" | "audioPublishYear" | "genre" | "recent";
 export type SortDirection = "asc" | "desc";
 export type FilterStatus = "all" | BookStatus;
 

@@ -9,7 +9,8 @@ export const LIBRARY_COLUMNS: Record<SortBy, { label: string; width: number }> =
   progress: { label: "Progress", width: 5.8 },
   series: { label: "Series", width: 10 },
   narrator: { label: "Narrator", width: 10 },
-  publishYear: { label: "Year", width: 4.2 },
+  publishYear: { label: "Book year", width: 6.2 },
+  audioPublishYear: { label: "Audio year", width: 6.2 },
   genre: { label: "Genre", width: 8 },
   recent: { label: "Last played", width: 8.4 },
 };

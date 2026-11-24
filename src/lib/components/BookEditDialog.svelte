@@ -1,13 +1,16 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import type { BookMeta, BookSource, BookStatus, Collection, UserBookData } from "../types";
   import {
     getUserBookData,
     setUserBookData,
     resetUserBookData,
-    pickCoverArt,
     pickCoverArtData,
+    getDisplayDuration,
   } from "../stores/userdataStore";
-  import { addFilelessBook, clearProgress, libraryStore } from "../stores/libraryStore";
+  import { addFilelessBook, clearProgress } from "../stores/libraryStore";
+  import { formatBookLength, parseBookLength, parseBookYear } from "../utils/bookEdit";
+  import { overrideCoverKey, saveCoverToDisk } from "../utils/coverStorage";
   import { audioStore } from "../stores/audioStore";
   import { get } from "svelte/store";
   import {
@@ -80,11 +83,10 @@
   let seriesInput = $state(seed.series || "");
   let seriesOrderInput = $state<number | "">(seed.seriesOrder ?? "");
   // svelte-ignore state_referenced_locally
-  let lengthHoursInput = $state<number | "">(
-    book && book.duration > 0 ? Math.round((book.duration / 3600) * 10) / 10 : "",
-  );
-  let yearReadInput = $state<number | "">(seed.yearRead ?? "");
-  let publishYearInput = $state<number | "">(seed.publishYear ?? "");
+  let lengthInput = $state(book ? formatBookLength(getDisplayDuration(book, seed)) : "");
+  let yearReadInput = $state(seed.yearRead == null ? "" : String(seed.yearRead));
+  let publishYearInput = $state(seed.publishYear == null ? "" : String(seed.publishYear));
+  let audioPublishYearInput = $state(seed.audioPublishYear == null ? "" : String(seed.audioPublishYear));
   let sourceInput = $state<BookSource>(seed.source);
   let status = $state<BookStatus>(seed.status);
   let description = $state(seed.description || "");
@@ -95,9 +97,37 @@
   let quoteInput = $state("");
   let bookCollectionIds = $state<string[]>([...seed.collections]);
 
-  // In create mode the cover lives in memory until save. In edit mode we still
-  // use the existing on-disk override via pickCoverArt.
+  // Covers, like text, remain a draft until Save in both modes.
   let createCover = $state<string | null>(null);
+  let saving = $state(false);
+  let pickingCover = $state(false);
+  let closeBlocked = $state(false);
+  let resetRequested = $state(false);
+  let errorMessage = $state("");
+  let errorNotice = $state<HTMLParagraphElement>();
+  let closeNotice = $state<HTMLDivElement>();
+  const currentYear = new Date().getFullYear();
+
+  function draftSnapshot() {
+    return JSON.stringify({ titleInput, authorInput, narratorInput, genreInput,
+      seriesInput, seriesOrderInput, lengthInput, yearReadInput, publishYearInput, audioPublishYearInput,
+      sourceInput, status, description, notes, tagsList, tagInput, quotesList, quoteInput,
+      bookCollectionIds, createCover, tierChanges });
+  }
+
+  function requestClose() {
+    if (saving || pickingCover) return;
+    if (dirty) {
+      closeBlocked = true;
+      void tick().then(() => closeNotice?.scrollIntoView?.({ block: "nearest" }));
+    }
+    else onclose();
+  }
+
+  function showError(message: string) {
+    errorMessage = message;
+    void tick().then(() => errorNotice?.scrollIntoView?.({ block: "nearest" }));
+  }
 
   const GENRE_SUGGESTIONS = [
     "Fiction", "Non-Fiction", "Sci-Fi", "Fantasy", "Mystery",
@@ -113,11 +143,8 @@
     { value: "Other", label: "Other" },
   ];
 
-  // Edit-mode cover preview pulls from userdata + book; create-mode pulls from the in-memory buffer.
   let coverPreview = $derived(
-    mode === "create"
-      ? createCover
-      : (getUserBookData(book!.filePath).coverArtOverride || (book ? book.coverArt : null)),
+    createCover ?? seed.coverArtOverride ?? book?.coverArt ?? null,
   );
 
   const MAX_INPUT_LENGTH = 500;
@@ -132,19 +159,6 @@
     const n = Math.floor(value);
     if (!Number.isFinite(n) || n < 1) return null;
     return n;
-  }
-
-  function parseYear(value: number | ""): number | null {
-    if (value === "" || typeof value !== "number") return null;
-    const n = Math.floor(value);
-    if (!Number.isFinite(n) || n < 1 || n > 3000) return null;
-    return n;
-  }
-
-  function parseHours(value: number | ""): number {
-    if (value === "" || typeof value !== "number") return 0;
-    if (!Number.isFinite(value) || value < 0) return 0;
-    return value * 3600;
   }
 
   function addTag() {
@@ -177,6 +191,9 @@
     get(defaultTierList)?.id ?? get(tierListsStore).lists[0]?.id ?? null,
   );
   let tierChanges = $state<Record<string, string | null>>({});
+  // Seeded once per mount; later store updates cannot erase a local draft.
+  const originalDraft = draftSnapshot();
+  let dirty = $derived(draftSnapshot() !== originalDraft);
 
   let tierListShown = $derived($tierListsStore.lists.find((l) => l.id === tierListId) ?? null);
   let tierOptions = $derived(
@@ -209,13 +226,15 @@
   }
 
   async function handleChangeCover() {
-    if (mode === "create") {
+    if (saving || pickingCover) return;
+    pickingCover = true;
+    try {
       const data = await pickCoverArtData();
       if (data) createCover = data;
-    } else if (book) {
-      await pickCoverArt(book.filePath);
-      // trigger reactivity on the derived cover preview
-      titleInput = titleInput;
+    } catch {
+      showError("Could not load this cover. Your other changes are still here.");
+    } finally {
+      pickingCover = false;
     }
   }
 
@@ -227,20 +246,36 @@
       genre: sanitizeText(genreInput, 100),
       series: sanitizeText(seriesInput, 200),
       seriesOrder: seriesInput.trim() ? parseInt1Plus(seriesOrderInput) : null,
-      yearRead: parseYear(yearReadInput),
-      publishYear: parseYear(publishYearInput),
+      yearRead: parseBookYear(yearReadInput),
+      publishYear: parseBookYear(publishYearInput),
+      audioPublishYear: parseBookYear(audioPublishYearInput),
+      durationOverride: book && lengthInput === formatBookLength(book.duration) ? null : parseBookLength(lengthInput),
       source: sourceInput,
       description: sanitizeText(description, 4000),
       notes: sanitizeText(notes, 4000),
-      tags: [...tagsList],
-      quotes: [...quotesList],
-      collections: bookCollectionIds,
+      tags: [...new Set([...tagsList, tagInput.trim()].filter(Boolean))],
+      quotes: [...quotesList, quoteInput.trim()].filter(Boolean),
+      collections: [...bookCollectionIds],
       status,
       dateFinished: status === "finished" ? (seed.dateFinished || new Date().toISOString()) : null,
     };
   }
 
   async function handleSave() {
+    if (saving || pickingCover) return;
+    errorMessage = "";
+    for (const [label, value] of [["Year read", yearReadInput], ["Book publication year", publishYearInput], ["Audiobook release year", audioPublishYearInput]]) {
+      if (value.trim() && parseBookYear(value) === null) {
+        showError(`${label}: enter a four-digit year between 1000 and 3000, or leave it empty.`);
+        return;
+      }
+    }
+    if (lengthInput.trim() && parseBookLength(lengthInput) === null) {
+      showError("Length: use H:MM:SS (12:30:00) or decimal hours (12.5 or 12,5). Maximum: 10,000 hours.");
+      return;
+    }
+    saving = true;
+    try {
     if (mode === "create") {
       if (!titleInput.trim()) return;
       const filePath = await addFilelessBook({
@@ -249,18 +284,9 @@
         coverArt: createCover,
         userData: {
           ...buildUserDataPatch(),
-          // Reflect length input as a duration hint on the book itself for display
-          // (handled below via library.update since BookMeta.duration is outside userData).
+          // Catalog duration is persisted with the other metadata, including on creation.
         },
       });
-      // Patch duration if user typed hours
-      const durationSecs = parseHours(lengthHoursInput);
-      if (durationSecs > 0) {
-        libraryStore.update((s) => ({
-          ...s,
-          books: s.books.map((b) => (b.filePath === filePath ? { ...b, duration: durationSecs } : b)),
-        }));
-      }
       await saveTiers(filePath);
       onsaved?.(filePath);
       onclose();
@@ -268,7 +294,9 @@
     }
 
     if (!book) return;
-    await setUserBookData(book.filePath, buildUserDataPatch());
+    const patch = buildUserDataPatch();
+    if (createCover) patch.coverArtOverride = await saveCoverToDisk(overrideCoverKey(book.filePath), createCover);
+    await setUserBookData(book.filePath, patch);
     // Newly marked not started: forget where it was, so it reads as never
     // opened. The book in the player keeps its place; the player is holding it.
     if (
@@ -281,12 +309,23 @@
     await saveTiers(book.filePath);
     onsaved?.(book.filePath);
     onclose();
+    } catch {
+      showError("Could not save the book. Your changes are still here; please try again.");
+    } finally {
+      saving = false;
+    }
   }
 
   async function handleReset() {
-    if (!book || mode === "create") return;
-    await resetUserBookData(book.filePath);
-    onclose();
+    if (!book || mode === "create" || saving || pickingCover) return;
+    if (!resetRequested) { resetRequested = true; return; }
+    saving = true;
+    try {
+      await resetUserBookData(book.filePath);
+      onclose();
+    } catch {
+      showError("Could not reset this book. Your changes are still here.");
+    } finally { saving = false; }
   }
 
   const statuses: { value: BookStatus; label: string }[] = [
@@ -296,11 +335,22 @@
   ];
 </script>
 
-<Modal {onclose} label={mode === "create" ? "Log a book" : "Edit book"}>
+<Modal onclose={requestClose} label={mode === "create" ? "Log a book" : "Edit book"}>
   <h3>{mode === "create" ? "Log a book" : "Edit book"}</h3>
   {#if mode === "create"}
     <p class="subtitle">Log a book you've read — no audio file required.</p>
   {/if}
+
+  {#if closeBlocked && dirty}
+    <div class="edit-notice" role="alert" bind:this={closeNotice}>
+      <p>You have unsaved changes. Save them below or explicitly discard them before closing.</p>
+      <button class="btn-ghost btn-sm" onclick={() => (closeBlocked = false)} disabled={saving}>Keep editing</button>
+      <button class="btn-ghost btn-sm" onclick={onclose} disabled={saving}>Discard changes</button>
+    </div>
+  {/if}
+  {#if errorMessage}<p class="edit-error" role="alert" bind:this={errorNotice}>{errorMessage}</p>{/if}
+
+  <fieldset class="edit-fields" disabled={saving || pickingCover}>
 
   <div class="cover-section">
     <div class="cover-preview">
@@ -316,14 +366,12 @@
   </div>
 
   <BookMetadataLookup
-    queryForBook={() => [
-      titleInput.trim() || book?.title,
-      authorInput.trim() || (book?.author === "Unknown Author" ? "" : book?.author),
-    ].filter(Boolean).join(" ").slice(0, 220)}
+    queryForBook={() => (titleInput.trim() || book?.title || "").slice(0, 220)}
+    authorForBook={() => authorInput.trim() || (book?.author === "Unknown Author" ? "" : book?.author) || ""}
     onapply={({ title, author, firstPublished }) => {
       if (title) titleInput = title;
       if (author) authorInput = author;
-      if (firstPublished) publishYearInput = firstPublished;
+      if (firstPublished) publishYearInput = String(firstPublished);
     }}
   />
 
@@ -414,17 +462,19 @@
       </datalist>
     </div>
     <div class="field flex">
-      <label class="label" for="edit-length">Length (hours)</label>
+      <label class="label" for="edit-length">Length (H:MM:SS or hours)</label>
       <input
         id="edit-length"
-        type="number"
+        type="text"
         class="input"
-        bind:value={lengthHoursInput}
-        placeholder="0"
-        step="0.1"
-        min="0"
-        disabled={mode === "edit" && !!book && book.fileless !== true}
+        bind:value={lengthInput}
+        placeholder="12:30:00 or 12,5"
+        maxlength={24}
+        aria-describedby="length-help"
       />
+      <p class="field-help" id="length-help">{book && !book.fileless
+        ? `Audio length: ${formatBookLength(book.duration) || "unknown"}. This field changes the library display, not playback. Clear it to use the audio length.`
+        : "For example, 12:30:00 or 12.5 / 12,5 hours."}</p>
     </div>
   </div>
 
@@ -433,25 +483,37 @@
       <label class="label" for="edit-year-read">Year read</label>
       <input
         id="edit-year-read"
-        type="number"
+        type="text"
+        inputmode="numeric"
         class="input"
         bind:value={yearReadInput}
-        placeholder="2024"
-        min="1"
-        max="3000"
+        placeholder={String(currentYear)}
+        maxlength={4}
+        pattern="[0-9]{4}"
       />
     </div>
     <div class="field flex">
-      <label class="label" for="edit-publish-year">Publish year</label>
+      <label class="label" for="edit-publish-year">Book first published</label>
       <input
         id="edit-publish-year"
-        type="number"
+        type="text"
+        inputmode="numeric"
         class="input"
         bind:value={publishYearInput}
         placeholder="2007"
-        min="1"
-        max="3000"
+        maxlength={4}
+        pattern="[0-9]{4}"
       />
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="field flex">
+      <label class="label" for="edit-audio-publish-year">Audiobook released</label>
+      <input id="edit-audio-publish-year" type="text" inputmode="numeric" class="input"
+        bind:value={audioPublishYearInput} placeholder="2018" maxlength={4} pattern="[0-9]{4}"
+        aria-describedby="audio-year-help" />
+      <p class="field-help" id="audio-year-help">Release year of this audio edition, independent of the original book.</p>
     </div>
     <div class="field flex">
       <label class="label" for="edit-source">Source</label>
@@ -596,19 +658,33 @@
     </div>
   {/if}
 
+  </fieldset>
+
+  {#if resetRequested}
+    <div class="edit-notice" role="alert">
+      <p>Reset all saved metadata overrides for this book? This also discards the current draft.</p>
+      <button class="btn-ghost btn-sm" onclick={() => (resetRequested = false)} disabled={saving}>Keep editing</button>
+      <button class="btn-ghost btn-sm" onclick={handleReset} disabled={saving}>Confirm reset</button>
+    </div>
+  {/if}
+
   <div class="dialog-actions">
     {#if mode === "edit"}
-      <button class="btn-ghost" onclick={handleReset}>Reset to original</button>
-    {:else}
-      <button class="btn-ghost" onclick={onclose}>Cancel</button>
+      <button class="btn-ghost" onclick={() => (resetRequested = true)} disabled={saving || pickingCover}>Reset to original</button>
     {/if}
-    <button class="btn-primary" onclick={handleSave} disabled={mode === "create" && !titleInput.trim()}>
-      {mode === "create" ? "Save" : "Save changes"}
+    <button class="btn-ghost" onclick={requestClose} disabled={saving || pickingCover}>Cancel</button>
+    <button class="btn-primary" onclick={handleSave} disabled={saving || pickingCover || (mode === "create" && !titleInput.trim())}>
+      {saving ? "Saving…" : mode === "create" ? "Save" : "Save changes"}
     </button>
   </div>
 </Modal>
 
 <style>
+  .edit-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+  .edit-notice { position: sticky; top: 0; z-index: 2; padding: 0.7rem; margin: 0.5rem 0; border: 1px solid var(--color-primary); border-radius: var(--radius-md); background: var(--color-surface); }
+  .edit-notice p, .edit-error { margin: 0 0 0.5rem; font-size: var(--font-size-sm); }
+  .edit-error { color: var(--color-primary); }
+  .field-help { font-size: var(--font-size-xs); color: var(--color-text-variant); margin-top: 0.35rem; }
   h3 {
     font-family: var(--font-headline);
     font-size: var(--font-size-lg);

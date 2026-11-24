@@ -3,13 +3,15 @@
   import { open } from "@tauri-apps/plugin-shell";
   import { searchOpenLibrary, type CatalogBook } from "../utils/openLibrary";
 
-  let { queryForBook, onapply }: {
+  let { queryForBook, authorForBook = () => "", onapply }: {
     queryForBook: () => string;
+    authorForBook?: () => string;
     onapply: (fields: Partial<Pick<CatalogBook, "title" | "author" | "firstPublished">>) => void;
   } = $props();
 
   let expanded = $state(false);
   let query = $state("");
+  let authorQuery = $state("");
   let status = $state<"idle" | "loading" | "done" | "error">("idle");
   let error = $state("");
   let results = $state<CatalogBook[]>([]);
@@ -23,20 +25,23 @@
   onDestroy(() => request?.abort());
 
   function toggle() {
-    if (!expanded && !query) query = queryForBook();
+    if (!expanded && !query && !authorQuery) {
+      query = queryForBook();
+      authorQuery = authorForBook();
+    }
     expanded = !expanded;
   }
 
   async function search(event: SubmitEvent) {
     event.preventDefault();
-    if (status === "loading" || !query.trim()) return;
+    if (status === "loading" || (!query.trim() && !authorQuery.trim())) return;
     status = "loading";
     chosen = null;
     applied = false;
     const controller = new AbortController();
     request = controller;
     try {
-      results = await searchOpenLibrary(query, controller.signal);
+      results = await searchOpenLibrary(query, controller.signal, authorQuery);
       status = "done";
     } catch (err) {
       if (controller.signal.aborted) return;
@@ -76,19 +81,22 @@
   {#if expanded}
     <div class="lookup-body">
       <form onsubmit={search}>
-        <label for="catalog-query">Open Library</label>
+        <label for="catalog-query">Title or ISBN (optional)</label>
         <div class="query">
-          <input bind:value={query} id="catalog-query" type="search" maxlength="220" placeholder="Title, author or ISBN" />
-          <button type="submit" disabled={!query.trim() || status === "loading"}>Search</button>
+          <input bind:value={query} id="catalog-query" type="search" maxlength="220" placeholder="Book title or ISBN" />
+          <button type="submit" disabled={(!query.trim() && !authorQuery.trim()) || status === "loading"}>Search</button>
         </div>
+        <label for="catalog-author">Author (optional)</label>
+        <div class="query"><input bind:value={authorQuery} id="catalog-author" type="search" maxlength="220" placeholder="Author name" /></div>
       </form>
-      <p>Search sends this text to Open Library. Imported fields are saved in ABPlayer's library.</p>
+      <p>ISBN is not required. Search by title and author, or just one of them. Search sends these fields to Open Library; imported metadata stays in the draft until you save the book.</p>
+      <p>Results describe books and may refer to a print edition, not your audiobook. Check the narrator, release year and length against your audio edition.</p>
       {#if status === "loading"}
         <p role="status">Searching Open Library…</p>
       {:else if status === "error"}
         <p role="alert">{error}</p>
       {:else if status === "done" && results.length === 0}
-        <p role="status">No matches. Try just the title or an ISBN.</p>
+        <p role="status">No matches. Try a shorter title, remove the author filter, or search by the author's name. An ISBN is not required.</p>
       {:else if status === "done"}
         <ul aria-label="Catalog matches">
           {#each results as result (result.id)}
@@ -105,7 +113,7 @@
             <legend>Copy into the book form</legend>
             <label><input type="checkbox" bind:checked={useTitle} /> Title</label>
             <label><input type="checkbox" bind:checked={useAuthor} disabled={!chosen.author} /> Author</label>
-            <label><input type="checkbox" bind:checked={useYear} disabled={!chosen.firstPublished} /> First publication year</label>
+            <label><input type="checkbox" bind:checked={useYear} disabled={!chosen.firstPublished} /> First publication year (book)</label>
           </fieldset>
           <div class="actions">
             <button type="button" onclick={apply} disabled={!useTitle && !useAuthor && !useYear}>Use selected fields</button>

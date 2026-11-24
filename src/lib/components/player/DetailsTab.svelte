@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { setUserBookData } from "../../stores/userdataStore";
+  import { setUserBookData, getDisplayDuration } from "../../stores/userdataStore";
+  import { formatTime } from "../../utils/format";
   import { focusOnMount } from "../../utils/focusOnMount";
   import type { BookMeta, UserBookData } from "../../types";
 
@@ -10,6 +11,7 @@
   }
 
   let { book, userData }: Props = $props();
+  let duration = $derived(getDisplayDuration(book, userData));
 
   let editingNotes = $state(false);
   let notesDraft = $state("");
@@ -65,8 +67,8 @@
         {#if userData.narrator}
           <div class="pv-meta-row"><span class="pv-meta-k">Narrator</span><span class="pv-meta-v">{userData.narrator}</span></div>
         {/if}
-        {#if book.duration > 0}
-          <div class="pv-meta-row"><span class="pv-meta-k">Length</span><span class="pv-meta-v mono">{(book.duration / 3600).toFixed(1)}h</span></div>
+        {#if duration > 0}
+          <div class="pv-meta-row"><span class="pv-meta-k">Library length</span><span class="pv-meta-v mono">{formatTime(duration)}</span></div>
         {/if}
         {#if book.chapters.length > 0}
           <div class="pv-meta-row"><span class="pv-meta-k">Chapters</span><span class="pv-meta-v mono">{book.chapters.length}{book.chapterSource === "sidecar" ? " · from sidecar file" : ""}</span></div>
@@ -82,7 +84,10 @@
           <div class="pv-meta-row"><span class="pv-meta-k">Year read</span><span class="pv-meta-v mono">{userData.yearRead}</span></div>
         {/if}
         {#if userData.publishYear}
-          <div class="pv-meta-row"><span class="pv-meta-k">Published</span><span class="pv-meta-v mono">{userData.publishYear}</span></div>
+          <div class="pv-meta-row"><span class="pv-meta-k">Book first published</span><span class="pv-meta-v mono">{userData.publishYear}</span></div>
+        {/if}
+        {#if userData.audioPublishYear}
+          <div class="pv-meta-row"><span class="pv-meta-k">Audiobook released</span><span class="pv-meta-v mono">{userData.audioPublishYear}</span></div>
         {/if}
         <div class="pv-meta-row"><span class="pv-meta-k">Added</span><span class="pv-meta-v">{formatDateAdded(userData.dateAdded)}</span></div>
         {#if userData.tags.length > 0}

@@ -12,6 +12,7 @@
     getDisplayTitle,
     getDisplayAuthor,
     getDisplayCover,
+    getDisplayDuration,
   } from "../../stores/userdataStore";
   import { libraryStore } from "../../stores/libraryStore";
   import { bookmarkStore } from "../../stores/bookmarkStore";
@@ -50,6 +51,7 @@
   let title = $derived(getDisplayTitle(book, stored));
   let author = $derived(getDisplayAuthor(book, stored));
   let cover = $derived(getDisplayCover(book, stored));
+  let duration = $derived(getDisplayDuration(book, stored));
   let status = $derived(userData.status);
   let tier = $derived(getBookTier($defaultTierList, book.filePath));
   let bookCollections = $derived(
@@ -101,7 +103,7 @@
         <div class="bd-facts">
           <StatusBadge {status} size="md" />
           {#if tier}<TierChip label={tier.label} color={tier.color} size="1.25rem" />{/if}
-          {#if book.duration > 0}<span class="mono">{formatTime(book.duration)}</span>{/if}
+          {#if duration > 0}<span class="mono">{formatTime(duration)}</span>{/if}
           {#if files.length > 1}<span class="mono">{files.length} files</span>{/if}
           {#if book.chapters.length > 0}<span class="mono">{book.chapters.length} chapters</span>{/if}
         </div>

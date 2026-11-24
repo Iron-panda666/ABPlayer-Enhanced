@@ -37,4 +37,19 @@ describe("Open Library lookup", () => {
     const { searchOpenLibrary } = await import("./openLibrary");
     await expect(searchOpenLibrary("Title", new AbortController().signal)).rejects.toThrow("rate limiting");
   });
+
+  it("finds a book by title and author without an ISBN, with a separate cache per author", async () => {
+    const fetchMock = vi.fn<typeof globalThis.fetch>(async () => new Response(JSON.stringify({ docs: [] })));
+    vi.stubGlobal("fetch", fetchMock);
+    const { searchOpenLibrary } = await import("./openLibrary");
+    const signal = new AbortController().signal;
+    await searchOpenLibrary("Rivers of London", signal, "Ben Aaronovitch");
+    const url = new URL(String(fetchMock.mock.calls[0][0]));
+    expect(url.searchParams.get("title")).toBe("Rivers of London");
+    expect(url.searchParams.get("author")).toBe("Ben Aaronovitch");
+    expect(url.searchParams.has("q")).toBe(false);
+    expect(await searchOpenLibrary("Rivers of London", signal, "Ben Aaronovitch")).toEqual([]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await expect(searchOpenLibrary("Rivers of London", signal, "Other Author")).rejects.toThrow("Wait a moment");
+  });
 });

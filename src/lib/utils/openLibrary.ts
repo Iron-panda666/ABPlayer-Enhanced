@@ -8,21 +8,29 @@ export interface CatalogBook {
 const cache = new Map<string, CatalogBook[]>();
 let lastRequest = -Infinity;
 
-export async function searchOpenLibrary(query: string, signal: AbortSignal): Promise<CatalogBook[]> {
-  const key = query.trim().replace(/\s+/g, " ");
+export async function searchOpenLibrary(query: string, signal: AbortSignal, authorQuery = ""): Promise<CatalogBook[]> {
+  const title = query.trim().replace(/\s+/g, " ");
+  const isbn = title.replace(/[ -]/g, "");
+  const isIsbn = /^(?:\d{9}[\dXx]|97[89]\d{10})$/.test(isbn);
+  const author = isIsbn ? "" : authorQuery.trim().replace(/\s+/g, " ");
+  const key = JSON.stringify([title, author]);
   const cached = cache.get(key);
   if (cached) return cached;
-  if (!key) return [];
+  if (!title && !author) return [];
   if (Date.now() - lastRequest < 1100) throw new Error("Wait a moment before searching again.");
   lastRequest = Date.now();
 
   const url = new URL("https://openlibrary.org/search.json");
-  const isbn = key.replace(/[ -]/g, "");
-  url.search = new URLSearchParams({
-    q: /^(?:\d{9}[\dXx]|97[89]\d{10})$/.test(isbn) ? `isbn:${isbn}` : key,
+  const params = new URLSearchParams({
     fields: "key,title,author_name,first_publish_year",
     limit: "8",
-  }).toString();
+  });
+  if (isIsbn) params.set("q", `isbn:${isbn}`);
+  else if (author) {
+    if (title) params.set("title", title);
+    params.set("author", author);
+  } else params.set("q", title);
+  url.search = params.toString();
   const response = await fetch(url, {
     credentials: "omit",
     referrerPolicy: "no-referrer",
