@@ -62,6 +62,16 @@ All screenshots on this page are captured from the running Windows application u
 
 Enable the Stream Deck hotkeys in **Settings → Stream Deck**, then assign **System → Hotkey** actions in the Elgato app.
 
+## Updates and backups
+
+Run the newer Fork installer to update an existing **ABPlayer Fork** installation. Setup reuses its current installation folder and replaces the application files in place, without requiring an uninstall first. Close the player normally before updating; setup waits for it to close rather than terminating playback.
+
+The library, listening positions, bookmarks, covers and settings live separately in `%APPDATA%\com.ironpanda666.abplayer` and are preserved by updates and repair. Uninstall has a separate option to delete application data.
+
+Before updating, use **Library → … → Backup and restore** to create a full profile backup. This is a manual step; the update installer does not automatically create a full backup. Audiobook audio files are not included in the profile archive. Restoring an archive keeps the previous profile as a safety copy.
+
+There is currently no in-app update checker or automatic download. Upgrading the original ABPlayer to the Fork is a separate first installation with an optional original-profile copy; it is not an in-place update of the original application.
+
 ## Build
 
 Install Node.js, Rust and the Windows prerequisites listed in the Tauri documentation.
