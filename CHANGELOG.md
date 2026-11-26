@@ -2,6 +2,17 @@
 
 Changes made in ABPlayer-Enhanced. The original player is maintained by [jhidalgo_dev / kurohige](https://github.com/kurohige/ABPlayer).
 
+## 1.7.0-Enhanced.1 — 2026-11-26
+
+- Jiří Veselý, aka Iron-panda666, introduces **`<upstream version>-Enhanced.<revision>`** naming to distinguish the original ABPlayer base from Enhanced improvements. This release includes prior local Fork/Enhanced milestones through 1.7.7; it is not a downgrade. See [version naming](docs/VERSIONING.md).
+- Publish the first Enhanced Windows installer and portable binaries with the original author's written permission, keeping the desktop version free and available to everyone.
+- Include copyright/distribution notices, the permission record, original and Enhanced contributor credits, and dependency license texts in release packages and the installed application folder.
+- Credit **Jose Hidalgo (jhidalgo_dev / kurohige)** for original ABPlayer and **Jiří Veselý, aka Iron-panda666**, for Enhanced changes and release maintenance.
+- Display both credits in **Settings → About** and derive the public version from `release-info.json` instead of the stale hardcoded value. Validate release/tag and internal Windows/package version consistency before builds.
+- Preserve existing installation/profile identities and the automatic pre-update backup policy.
+
+[Detailed notes](docs/releases/1.7.0-enhanced.1.md)
+
 ## 1.7.7 — 2026-11-24
 
 - Rename the app, executable, window and tray text to **ABPlayer-Enhanced**.
@@ -54,6 +65,6 @@ Changes made in ABPlayer-Enhanced. The original player is maintained by [jhidalg
 
 [Measured comparison with upstream](docs/UPSTREAM-COMPARISON.md)
 
-Binary distribution remains subject to upstream permission. Executables are not published on the fork's public Releases page.
+Binary distribution from 1.7.0-Enhanced.1 is shared with the [upstream author's written permission](UPSTREAM-PERMISSION.md). The desktop version remains free and available to everyone; original and third-party notices continue to apply.
 
 Developed with AI-assisted vibe coding using OpenAI Codex.

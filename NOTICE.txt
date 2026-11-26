@@ -1,0 +1,28 @@
+ABPlayer-Enhanced
+An unofficial, freely available modified desktop version of ABPlayer.
+
+Original application and design
+  Jose Hidalgo — jhidalgo_dev / kurohige
+  https://github.com/kurohige/ABPlayer
+  https://jhidalgo.dev/
+
+Enhanced changes and release maintenance
+  Jiří Veselý, aka Iron-panda666
+  https://github.com/Iron-panda666/ABPlayer-Enhanced
+
+Enhanced features include chapter/track navigation, bookmarks within the
+chapter list, tray controls, a configurable mini player, background opacity,
+an expanded player, audio visualizations, sortable library columns,
+Unfinished and exact 0% progress filters, Open Library metadata lookup,
+protected book-editing drafts, separate book/audiobook publication years,
+Stream Deck hotkeys, undo seek, full profile backup/restore, installer
+maintenance and verified automatic pre-update backups with retention of
+three automatic archives. See CHANGELOG.md for details and limitations.
+
+Distributed with the original author's written permission:
+https://github.com/kurohige/ABPlayer/issues/2#issuecomment-7173942970
+
+The original author's credits and copyright notices are retained. This
+Enhanced release is not an official upstream ABPlayer release.
+
+Developed with AI-assisted vibe coding using OpenAI Codex.

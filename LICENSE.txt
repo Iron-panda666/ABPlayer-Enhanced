@@ -1,0 +1,30 @@
+ABPlayer-Enhanced — Copyright and distribution notice
+
+Original ABPlayer: Jose Hidalgo (jhidalgo_dev / kurohige).
+Original project: https://github.com/kurohige/ABPlayer
+The upstream copyright notice is: "All rights reserved. This source code is
+provided for viewing purposes."
+
+Enhanced changes and release maintenance:
+Copyright (c) 2026 Jiří Veselý, aka Iron-panda666.
+https://github.com/Iron-panda666/ABPlayer-Enhanced
+
+This is an unofficial modified version of ABPlayer. It is made available
+without charge with the upstream author's written permission. The desktop
+version will remain available for everyone to use.
+
+The permission is preserved in UPSTREAM-PERMISSION.md and can be read at:
+https://github.com/kurohige/ABPlayer/issues/2#issuecomment-7173942970
+
+This notice records attribution and the upstream author's permission. It does
+not replace the original copyright notice or relicense upstream code under
+MIT, Apache, or another standard open-source license.
+
+Third-party components retain their own copyright notices and license terms.
+See THIRD-PARTY-NOTICES.txt and the accompanying licenses directory. Microsoft
+WebView2 Runtime is installed separately and remains subject to Microsoft's
+own terms.
+
+See NOTICE.txt for the contributors and CHANGELOG.md for the Enhanced changes.
+Development of the Enhanced changes used AI-assisted vibe coding with
+OpenAI Codex.

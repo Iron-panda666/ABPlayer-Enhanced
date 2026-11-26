@@ -42,6 +42,8 @@ The outputs are:
 - Application: `src-tauri/target/x86_64-pc-windows-msvc/release/ABPlayer-Enhanced.exe`
 - Installer: `src-tauri/target/x86_64-pc-windows-msvc/release/bundle/nsis/ABPlayer-Enhanced_<version>_x64-setup.exe`
 
+The raw build uses the internal Windows installer version. Public packages use the separate upstream/Enhanced release label, such as **1.7.0-Enhanced.1**. See [version naming](VERSIONING.md) and the [release packaging workflow](DISTRIBUTION.md).
+
 For a build without an installer:
 
 ```powershell

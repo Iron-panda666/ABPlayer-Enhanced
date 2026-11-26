@@ -56,7 +56,7 @@ The original was already a capable audiobook player with a mini player, bookmark
 
 ## Distribution status
 
-The upstream README states that all rights are reserved and provides source for viewing. The release is being prepared as a private draft until permission to distribute modified binaries is obtained. A public GitHub fork is not a substitute for that permission.
+The upstream README states that all rights are reserved and provides source for viewing. The upstream author subsequently [granted permission](../UPSTREAM-PERMISSION.md) to share the modified desktop application while keeping it available to everyone. Public binaries start with Enhanced 1.7.0-Enhanced.1; original copyright and third-party license notices are retained.
 
 [Full code comparison](https://github.com/Iron-panda666/ABPlayer-Enhanced/compare/6071782e61cfbdb9caf5142d166284bf1f628a55...c56ced2ad25dd9b50f947772d338e7498f63ebc2)
 

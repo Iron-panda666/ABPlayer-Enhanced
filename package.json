@@ -1,11 +1,12 @@
 {
   "name": "abplayer",
   "private": true,
-  "version": "1.7.7",
+  "version": "1.8.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "node scripts/check-release-info.mjs && vite build",
+    "release:check": "node scripts/check-release-info.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "test": "vitest run",

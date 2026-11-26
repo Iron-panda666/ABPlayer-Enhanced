@@ -1,0 +1,3 @@
+# Preserve original third-party notice bytes and their existing whitespace.
+licenses/** -text -whitespace
+THIRD-PARTY-NOTICES.txt -text -whitespace

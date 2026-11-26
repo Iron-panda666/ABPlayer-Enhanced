@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/nickkuk/nickkuk.github.io/master/tauri-v2-schema/tauri.conf.json",
   "productName": "ABPlayer-Enhanced",
   "mainBinaryName": "ABPlayer-Enhanced",
-  "version": "1.7.7",
+  "version": "1.8.0",
   "identifier": "com.ironpanda666.abplayer",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -26,7 +26,9 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$APPDATA/covers/**"],
+          "allow": [
+            "$APPDATA/covers/**"
+          ],
           "deny": []
         }
       }
@@ -35,7 +37,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -50,6 +54,18 @@
         "template": "installer/installer.nsi",
         "installerHooks": "installer/maintenance.nsh"
       }
+    },
+    "publisher": "ironpanda666",
+    "homepage": "https://github.com/Iron-panda666/ABPlayer-Enhanced",
+    "copyright": "Original ABPlayer: Jose Hidalgo (jhidalgo_dev / kurohige). Enhanced changes (c) 2026 Jiří Veselý, aka Iron-panda666.",
+    "licenseFile": "../LICENSE.txt",
+    "resources": {
+      "../licenses/": "licenses/",
+      "../UPSTREAM-PERMISSION.md": "UPSTREAM-PERMISSION.md",
+      "../THIRD-PARTY-NOTICES.txt": "THIRD-PARTY-NOTICES.txt",
+      "../CHANGELOG.md": "CHANGELOG.md",
+      "../LICENSE.txt": "LICENSE.txt",
+      "../NOTICE.txt": "NOTICE.txt"
     }
   }
 }

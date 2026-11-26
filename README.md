@@ -2,6 +2,12 @@
 
 An ABPlayer fork with a tray mini player, configurable library columns, playback visualizations and full library backups.
 
+**Original ABPlayer:** Jose Hidalgo (jhidalgo_dev / kurohige). **Enhanced changes:** Jiří Veselý, aka **Iron-panda666**.
+
+Download the Windows installer or portable ZIP from [Releases](https://github.com/Iron-panda666/ABPlayer-Enhanced/releases/latest). Binary distribution is shared with the [original author's permission](UPSTREAM-PERMISSION.md); the desktop version remains free and available to everyone. Each package includes license notices and contributor credits.
+
+**Release naming:** Jiří introduced **`<upstream version>-Enhanced.<revision>`** to keep the original ABPlayer version separate from Enhanced improvements. **1.7.0-Enhanced.1** is based on original ABPlayer 1.7.0 and includes the changes from the earlier local Fork/Enhanced builds through 1.7.7. It is not a downgrade. See [version naming and the transition](docs/VERSIONING.md).
+
 ![Expanded player with chapter navigation and an audio visualization](docs/screenshots/player-expanded.jpg)
 
 ## What's added
@@ -82,9 +88,9 @@ See the separate [Windows build guide](docs/BUILD-WINDOWS.md) for prerequisites,
 
 ## Project status
 
-See the complete [Changelog](CHANGELOG.md), the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) and the [1.7.7 release notes](docs/releases/1.7.7-enhanced.md). Binary distribution is currently awaiting upstream permission; no public installer is available from this fork.
+See the complete [Changelog](CHANGELOG.md), the [comparison with upstream 1.7.0](docs/UPSTREAM-COMPARISON.md) and the [1.7.0-Enhanced.1 release notes](docs/releases/1.7.0-enhanced.1.md).
 
-The Windows build is version **1.7.7**. The frontend suite has 194 passing tests. Nine standalone native backup tests cover archive restoration, relocation, profile locking, backup failures and retention without deleting manual archives. The complete native test suite previously encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
+The current public release is **1.7.0-Enhanced.1** (internal Windows build **1.8.0**, as explained in [version naming](docs/VERSIONING.md)). The frontend suite has 194 passing tests. Nine standalone native backup tests cover archive restoration, relocation, profile locking, backup failures and retention without deleting manual archives. The complete native test suite previously encountered a Windows test-loader error. Physical Stream Deck hardware still needs hands-on verification.
 
 Open Library receives the query when you select **Search**. Imported catalog fields are stored in the player's library.
 
@@ -92,7 +98,9 @@ Open Library receives the query when you select **Search**. Imported catalog fie
 
 Based on [ABPlayer by jhidalgo_dev](https://github.com/kurohige/ABPlayer). The original documentation is preserved in [docs/upstream/README.md](docs/upstream/README.md).
 
-The upstream project reserves all rights. Its copyright notices and third-party license notices continue to apply. Public installer distribution requires permission from the upstream rights holder or an applicable license.
+The upstream project reserves all rights. Its copyright notices and third-party license notices continue to apply. The upstream author granted permission to share the modified desktop application while keeping it available to everyone; the original response is preserved in [UPSTREAM-PERMISSION.md](UPSTREAM-PERMISSION.md).
+
+See [LICENSE.txt](LICENSE.txt), [NOTICE.txt](NOTICE.txt), [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) and [licenses](licenses). This records permission and attribution without claiming a standard open-source license for the upstream application.
 
 The custom installer includes Tauri's MIT notice in [src-tauri/installer/LICENSE-TAURI-MIT](src-tauri/installer/LICENSE-TAURI-MIT).
 

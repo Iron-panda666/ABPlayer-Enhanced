@@ -8,7 +8,8 @@
   import { open as shellOpen } from "@tauri-apps/plugin-shell";
   import { libraryStore, rescan, clearSplits, restoreRemoved } from "../stores/libraryStore";
 
-  const APP_VERSION = "1.7.3";
+  import releaseInfo from "../../../release-info.json";
+  const APP_VERSION = releaseInfo.releaseVersion;
   const CREATOR_NAME = "jhidalgo_dev";
   const COFFEE_URL = "https://buymeacoffee.com/jhidalgo_dev";
 
@@ -293,13 +294,16 @@
         <div class="about-links">
           <p class="about-creator">
             <span class="material-symbols-outlined" style="font-size:14px;">person</span>
-            Created by {CREATOR_NAME}
+            Original ABPlayer {releaseInfo.upstreamVersion} by Jose Hidalgo ({CREATOR_NAME} / kurohige)
           </p>
           <button class="coffee-btn" onclick={() => openExternal(COFFEE_URL)}>
             <span class="material-symbols-outlined" style="font-size:16px;">coffee</span>
             Buy Me a Coffee
           </button>
         </div>
+        <p class="about-creator">Enhanced changes by Jiří Veselý, aka Iron-panda666.</p>
+        <p class="about-creator">Unofficial fork, shared with the original author's permission.</p>
+        <p class="about-creator">Developed with AI-assisted vibe coding using OpenAI Codex.</p>
       </div>
     </div>
   </aside>
